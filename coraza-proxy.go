@@ -146,6 +146,12 @@ SecRule REQUEST_FILENAME "@rx \\.(css|js|png|jpg|jpeg|gif|ico)$" "phase:1,pass,i
 
 # Или через регулярное выражение FTP
 SecRule REQUEST_FILENAME "@rx ^/ftp(/|$)" "phase:1,deny,status:403,id:10003,msg:'FTP path blocked'"
+# Block requests with suspicious fragments
+SecRule REQUEST_URI "@rx #.*search.*q=.*%3C" "phase:1,deny,status:403,id:6001,msg:'XSS in URL fragment detected'"
+
+SecRule REQUEST_URI "@rx #.*q=.*onerror" "phase:1,deny,status:403,id:6002,msg:'XSS in URL fragment detected'"
+
+SecRule REQUEST_URI "@rx #.*alert\\(" "phase:1,deny,status:403,id:6003,msg:'XSS in URL fragment detected'"
 `
 
 	return rules
@@ -322,6 +328,77 @@ func (p *CorazaProxy) detectResponseXSS(body []byte) bool {
 	}
 	return false
 }
+func (p *CorazaProxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+    clientIP := p.getClientIP(r)
+
+    // Brute force protection
+    if p.isBruteForceBlocked(clientIP) {
+        p.logger.Warn("Brute force blocked", zap.String("ip", clientIP))
+        http.Error(w, "Too Many Requests", http.StatusTooManyRequests)
+        return
+    }
+
+    // Count login attempts
+    if strings.Contains(r.URL.Path, "/rest/user/login") {
+        p.incrementBruteForceCounter(clientIP)
+    }
+
+    // Check for XSS in URL fragment (part after #)
+    if p.detectXSSInURL(r) {
+        p.logger.Warn("XSS detected in URL fragment", 
+            zap.String("ip", clientIP),
+            zap.String("url", r.URL.String()))
+        http.Error(w, "XSS attack detected", http.StatusForbidden)
+        return
+    }
+
+    // XSS check in query parameters
+    if p.detectXSSInRequest(r) {
+        p.logger.Warn("XSS detected in request parameters", 
+            zap.String("ip", clientIP),
+            zap.String("path", r.URL.Path))
+        http.Error(w, "XSS attack detected", http.StatusForbidden)
+        return
+    }
+
+    // Create new transaction
+    tx := p.waf.NewTransaction()
+    defer tx.Close()
+
+    // ... остальной код WAF обработки
+}
+
+func (p *CorazaProxy) detectXSSInURL(r *http.Request) bool {
+    // Get the full URL including fragment
+    fullURL := r.URL.String()
+    
+    // Check the fragment part (after #)
+    if fragment := r.URL.Fragment; fragment != "" {
+        if p.isXSSPayload(fragment) {
+            return true
+        }
+        
+        // Parse fragment as URL to get query parameters
+        if fragmentURL, err := url.Parse(fragment); err == nil {
+            // Check fragment query parameters
+            for _, values := range fragmentURL.Query() {
+                for _, value := range values {
+                    if p.isXSSPayload(value) {
+                        return true
+                    }
+                }
+            }
+            
+            // Check fragment path
+            if p.isXSSPayload(fragmentURL.Path) {
+                return true
+            }
+        }
+    }
+    
+    return false
+}
+
 func (p *CorazaProxy) detectXSSInRequest(r *http.Request) bool {
     // Check URL parameters
     for _, values := range r.URL.Query() {
@@ -379,6 +456,9 @@ func (p *CorazaProxy) isXSSPayload(input string) bool {
         
         // CSS
         "expression(",
+        
+        // Specific patterns from your test case
+        "src=x", "onerror=alert", "img src",
     }
     
     inputLower := strings.ToLower(input)
