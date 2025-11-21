@@ -349,30 +349,27 @@ func (p *CorazaProxy) detectResponseXSS(body []byte) bool {
 }
 
 func (p *CorazaProxy) detectXSSInURL(r *http.Request) bool {
-    // УБРАЛИ fullURL - она не используется
+    // Проверяем полный URL включая фрагмент
+    fullURL := r.URL.String()
     
-    // Check the fragment part (after #)
+    // Проверяем фрагмент
     if fragment := r.URL.Fragment; fragment != "" {
-        if p.isXSSPayload(fragment) {
-            return true
-        }
-        
-        // Parse fragment as URL to get query parameters
-        if fragmentURL, err := url.Parse(fragment); err == nil {
-            // Check fragment query parameters
-            for _, values := range fragmentURL.Query() {
-                for _, value := range values {
-                    if p.isXSSPayload(value) {
-                        return true
-                    }
-                }
-            }
-            
-            // Check fragment path
-            if p.isXSSPayload(fragmentURL.Path) {
+        // Декодируем URL-encoded символы в фрагменте
+        if decoded, err := url.QueryUnescape(fragment); err == nil {
+            if p.isXSSPayload(decoded) {
                 return true
             }
         }
+        
+        // Проверяем закодированную версию
+        if p.isXSSPayload(fragment) {
+            return true
+        }
+    }
+    
+    // Проверяем полный URL на наличие XSS паттернов
+    if p.isXSSPayload(fullURL) {
+        return true
     }
     
     return false
@@ -450,7 +447,7 @@ func (p *CorazaProxy) isXSSPayload(input string) bool {
     return false
 }
 func main() {
-	backendURL := "192.168.0.185:3000"
+	backendURL := "http://192.168.0.185:3000"
 	if len(os.Args) > 1 {
 		backendURL = os.Args[1]
 	}
