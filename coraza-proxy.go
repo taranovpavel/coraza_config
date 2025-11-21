@@ -81,8 +81,85 @@ SecResponseBodyLimit 524288
 SecAuditEngine RelevantOnly
 SecAuditLogParts "ABIJDEFHZ"
 
-# XSS Protection
-SecRule ARGS|ARGS_NAMES "@rx <script[^>]*>" "phase:1,deny,status:403,id:12001,msg:'XSS script tag detected'"
+# ===== XSS PROTECTION RULES =====
+
+# Базовые XSS паттерны
+SecRule ARGS|ARGS_NAMES|REQUEST_BODY "@rx (?i)<script[^>]*>" \
+    "phase:1,deny,status:403,id:1001,msg:'XSS: Script tag detected'"
+
+SecRule ARGS|ARGS_NAMES|REQUEST_BODY "@rx (?i)</script>" \
+    "phase:1,deny,status:403,id:1002,msg:'XSS: Closing script tag'"
+
+# JavaScript protocol
+SecRule ARGS|ARGS_NAMES|REQUEST_BODY "@rx (?i)javascript:" \
+    "phase:1,deny,status:403,id:1003,msg:'XSS: JavaScript protocol'"
+
+# Event handlers
+SecRule ARGS|ARGS_NAMES|REQUEST_BODY "@rx (?i)\bon\w+\s*=" \
+    "phase:1,deny,status:403,id:1004,msg:'XSS: Event handler detected'"
+
+# Dangerous functions
+SecRule ARGS|ARGS_NAMES|REQUEST_BODY "@rx (?i)(alert|confirm|prompt)\s*\\(" \
+    "phase:1,deny,status:403,id:1005,msg:'XSS: Dangerous function call'"
+
+SecRule ARGS|ARGS_NAMES|REQUEST_BODY "@rx (?i)eval\\s*\\(" \
+    "phase:1,deny,status:403,id:1006,msg:'XSS: eval function detected'"
+
+# Document object manipulation
+SecRule ARGS|ARGS_NAMES|REQUEST_BODY "@rx (?i)document\\.(cookie|location|write|domain)" \
+    "phase:1,deny,status:403,id:1007,msg:'XSS: Document object access'"
+
+# HTML entities and encoding bypass
+SecRule ARGS|ARGS_NAMES|REQUEST_BODY "@rx (?i)&lt;script|%3cscript|&#x3c;script" \
+    "phase:1,deny,status:403,id:1008,msg:'XSS: Encoded script tag'"
+
+# Iframe and object tags
+SecRule ARGS|ARGS_NAMES|REQUEST_BODY "@rx (?i)<iframe[^>]*>|<object[^>]*>|<embed[^>]*>" \
+    "phase:1,deny,status:403,id:1009,msg:'XSS: Embedded object tag'"
+
+# SVG with scripts
+SecRule ARGS|ARGS_NAMES|REQUEST_BODY "@rx (?i)<svg[^>]*>.*<script" \
+    "phase:1,deny,status:403,id:1010,msg:'XSS: SVG with script'"
+
+# Data URI scheme
+SecRule ARGS|ARGS_NAMES|REQUEST_BODY "@rx (?i)data:text/html" \
+    "phase:1,deny,status:403,id:1011,msg:'XSS: Data URI scheme'"
+
+# CSS expressions (IE)
+SecRule ARGS|ARGS_NAMES|REQUEST_BODY "@rx (?i)expression\\s*\\(" \
+    "phase:1,deny,status:403,id:1012,msg:'XSS: CSS expression'"
+
+# VBScript
+SecRule ARGS|ARGS_NAMES|REQUEST_BODY "@rx (?i)vbscript:" \
+    "phase:1,deny,status:403,id:1013,msg:'XSS: VBScript protocol'"
+
+# Meta tag refresh
+SecRule ARGS|ARGS_NAMES|REQUEST_BODY "@rx (?i)<meta[^>]*http-equiv\\s*=\\s*[\"']?refresh" \
+    "phase:1,deny,status:403,id:1014,msg:'XSS: Meta refresh'"
+
+# Form action hijacking
+SecRule ARGS|ARGS_NAMES|REQUEST_BODY "@rx (?i)<form[^>]*action\\s*=\\s*[\"']?javascript:" \
+    "phase:1,deny,status:403,id:1015,msg:'XSS: Form action hijacking'"
+
+# Link hijacking
+SecRule ARGS|ARGS_NAMES|REQUEST_BODY "@rx (?i)<a[^>]*href\\s*=\\s*[\"']?javascript:" \
+    "phase:1,deny,status:403,id:1016,msg:'XSS: Link hijacking'"
+
+# Image with onerror
+SecRule ARGS|ARGS_NAMES|REQUEST_BODY "@rx (?i)<img[^>]*onerror\\s*=" \
+    "phase:1,deny,status:403,id:1017,msg:'XSS: Image with onerror'"
+
+# Input tags with events
+SecRule ARGS|ARGS_NAMES|REQUEST_BODY "@rx (?i)<input[^>]*on\\w+\\s*=" \
+    "phase:1,deny,status:403,id:1018,msg:'XSS: Input with event handler'"
+
+# Style tags with expressions
+SecRule ARGS|ARGS_NAMES|REQUEST_BODY "@rx (?i)<style[^>]*>.*@import" \
+    "phase:1,deny,status:403,id:1019,msg:'XSS: Style with import'"
+
+# Base tag hijacking
+SecRule ARGS|ARGS_NAMES|REQUEST_BODY "@rx (?i)<base[^>]*href\\s*=\\s*[\"']?javascript:" \
+    "phase:1,deny,status:403,id:1020,msg:'XSS: Base tag hijacking'"
 
 SecRule ARGS|ARGS_NAMES "@rx javascript:" "phase:1,deny,status:403,id:12002,msg:'XSS javascript detected'"
 
