@@ -121,7 +121,29 @@ SecRule REQUEST_FILENAME "@rx \\.(css|js|png|jpg|jpeg|gif|ico|woff|ttf)$" "phase
 `
 	return rules
 }
-
+func (p *CorazaProxy) isHealthCheckRequest(r *http.Request) bool {
+	healthCheckPaths := []string{
+		"/health",
+		"/healthz", 
+		"/ready",
+		"/readyz",
+		"/live",
+		"/livez",
+		"/status",
+		"/ping",
+		"/health-check",
+		"/api/health",
+		"/monitoring/health",
+	}
+	
+	for _, path := range healthCheckPaths {
+		if r.URL.Path == path {
+			return true
+		}
+	}
+	
+	return false
+}
 func (p *CorazaProxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	clientIP := p.getClientIP(r)
 	if p.isHealthCheckRequest(r) {
