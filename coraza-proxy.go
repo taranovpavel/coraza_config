@@ -124,7 +124,13 @@ SecRule REQUEST_FILENAME "@rx \\.(css|js|png|jpg|jpeg|gif|ico|woff|ttf)$" "phase
 
 func (p *CorazaProxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	clientIP := p.getClientIP(r)
-
+	if p.isHealthCheckRequest(r) {
+        p.logger.Debug("Health check request - bypassing WAF",
+            zap.String("path", r.URL.Path),
+            zap.String("ip", clientIP))
+        p.reverseProxy.ServeHTTP(w, r)
+        return
+    }
 	// Детальное логирование
 	p.logger.Info("REQUEST",
 		zap.String("ip", clientIP),
