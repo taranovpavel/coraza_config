@@ -8,7 +8,6 @@ import (
 	"net"
 	"net/http"
 	"net/http/httputil"
-	"net/url"
 	"os"
 	"strconv"
 	"strings"
@@ -390,7 +389,6 @@ func (p *CorazaProxy) incrementBruteForceCounter(ip string) {
 func (p *CorazaProxy) cleanupXSSAttempts() {
 	for {
 		time.Sleep(10 * time.Minute)
-		now := time.Now()
 		for ip := range p.xssAttempts {
 			// Удаляем старые записи (старше 30 минут)
 			if p.xssAttempts[ip] > 0 {
