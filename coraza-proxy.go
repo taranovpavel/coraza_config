@@ -39,6 +39,7 @@ func NewCorazaProxy(backendURL string) (*CorazaProxy, error) {
 		return nil, err
 	}
 
+	// Create WAF with minimal configuration
 	waf, err := coraza.NewWAF(
 		coraza.NewWAFConfig().
 			WithDirectives(loadCustomRules()),
@@ -82,21 +83,25 @@ SecAuditEngine RelevantOnly
 SecAuditLogParts "ABIJDEFHZ"
 
 # XSS Protection
-SecRule ARGS|ARGS_NAMES|REQUEST_BODY|REQUEST_HEADERS "@rx (?i)(<script[^>]*>|</script>|javascript:|\balert\s*\()" "phase:1,deny,status:403,id:12001,msg:'XSS attack detected'"
+SecRule ARGS|ARGS_NAMES "@rx <script[^>]*>" "phase:1,deny,status:403,id:12001,msg:'XSS script tag detected'"
 
-SecRule ARGS|ARGS_NAMES|REQUEST_BODY|REQUEST_HEADERS "@rx (?i)(\bon\w+\s*=)" "phase:1,deny,status:403,id:12002,msg:'XSS event handlers detected'"
+SecRule ARGS|ARGS_NAMES "@rx javascript:" "phase:1,deny,status:403,id:12002,msg:'XSS javascript detected'"
+
+SecRule ARGS|ARGS_NAMES "@rx on\\w+\\s*=" "phase:1,deny,status:403,id:12003,msg:'XSS event handler detected'"
 
 # SQL Injection Protection
-SecRule ARGS|ARGS_NAMES|REQUEST_BODY|REQUEST_HEADERS "@rx (?i)(union\s+select|or\s+1=1|drop\s+table)" "phase:1,deny,status:403,id:11001,msg:'SQL Injection detected'"
+SecRule ARGS|ARGS_NAMES "@rx union.*select" "phase:1,deny,status:403,id:11001,msg:'SQL Injection detected'"
+
+SecRule ARGS|ARGS_NAMES "@rx or.*1=1" "phase:1,deny,status:403,id:11002,msg:'SQL Injection detected'"
 
 # Path Traversal Protection
-SecRule REQUEST_FILENAME|ARGS|ARGS_NAMES "@rx (\.\./|\.\.\\|/etc/passwd)" "phase:1,deny,status:403,id:13001,msg:'Path traversal detected'"
+SecRule REQUEST_FILENAME|ARGS|ARGS_NAMES "@rx \\.\\./" "phase:1,deny,status:403,id:13001,msg:'Path traversal detected'"
 
 # Command Injection Protection
-SecRule ARGS|ARGS_NAMES|REQUEST_BODY "@rx (\|\s*rm\s+-rf|\|\s*wget\s+)" "phase:1,deny,status:403,id:14001,msg:'Command injection detected'"
+SecRule ARGS|ARGS_NAMES "@rx \\|.*rm" "phase:1,deny,status:403,id:14001,msg:'Command injection detected'"
 
 # Static files - no inspection
-SecRule REQUEST_FILENAME "@rx \.(css|js|png|jpg|jpeg|gif|ico)$" "phase:1,pass,id:30001,ctl:ruleEngine=Off"
+SecRule REQUEST_FILENAME "@rx \\.(css|js|png|jpg|jpeg|gif|ico)$" "phase:1,pass,id:30001,ctl:ruleEngine=Off"
 `
 
 	return rules
@@ -121,16 +126,20 @@ func (p *CorazaProxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	tx := p.waf.NewTransaction()
 	defer tx.Close()
 
-	// Process request manually
-	// Set request headers
+	// Simple request processing - only check URL and headers
+	// Process URI
+	tx.ProcessURI(r.URL.String(), r.Method, r.Proto)
+	
+	// Process headers
 	for key, values := range r.Header {
 		for _, value := range values {
 			tx.AddRequestHeader(key, value)
 		}
 	}
+	tx.ProcessRequestHeaders()
 
-	// Process request body
-	if r.Body != nil {
+	// Process request body if needed for specific endpoints
+	if r.Body != nil && (strings.Contains(r.URL.Path, "/api/") || strings.Contains(r.URL.Path, "/rest/")) {
 		body, err := io.ReadAll(r.Body)
 		if err != nil {
 			p.logger.Error("Failed to read body", zap.Error(err))
@@ -139,15 +148,18 @@ func (p *CorazaProxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 		r.Body = io.NopCloser(bytes.NewBuffer(body))
 		
-		// Write body to transaction
-		if _, err := tx.RequestBodyWriter().Write(body); err != nil {
-			p.logger.Error("Failed to write body to WAF", zap.Error(err))
+		// Process request body parameters manually
+		if len(body) > 0 {
+			// Simple body inspection for common attack patterns
+			if p.detectAttackInBody(body) {
+				p.logger.Warn("Attack detected in request body", 
+					zap.String("ip", clientIP),
+					zap.String("path", r.URL.Path))
+				http.Error(w, "Request blocked by security rules", http.StatusForbidden)
+				return
+			}
 		}
 	}
-
-	// Process URI and method
-	tx.ProcessURI(r.URL.String(), r.Method, r.Proto)
-	tx.ProcessRequestHeaders()
 
 	// Check if request was interrupted (blocked)
 	if it := tx.Interruption(); it != nil {
@@ -162,6 +174,25 @@ func (p *CorazaProxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	// If request passed WAF, proxy to backend
 	p.reverseProxy.ServeHTTP(w, r)
+}
+
+func (p *CorazaProxy) detectAttackInBody(body []byte) bool {
+	patterns := []string{
+		`<script[^>]*>`,
+		`javascript:`,
+		`on\\w+\\s*=`,
+		`union.*select`,
+		`or.*1=1`,
+		`\\.\\./`,
+	}
+	
+	bodyStr := string(body)
+	for _, pattern := range patterns {
+		if matched, _ := regexp.MatchString(pattern, bodyStr); matched {
+			return true
+		}
+	}
+	return false
 }
 
 func (p *CorazaProxy) modifyResponse(res *http.Response) error {
@@ -250,7 +281,7 @@ func (p *CorazaProxy) cleanupBruteForceCounters() {
 func (p *CorazaProxy) detectResponseXSS(body []byte) bool {
 	patterns := []string{
 		`<script[^>]*>.*?</script>`,
-		`on\w+\s*=\s*"[^"]*"`,
+		`on\\w+\\s*=\\s*"[^"]*"`,
 	}
 	for _, pattern := range patterns {
 		if matched, _ := regexp.Match(pattern, body); matched {
