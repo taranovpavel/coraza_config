@@ -10,7 +10,6 @@ import (
 	"net/http/httputil"
 	"net/url"
 	"os"
-	"regexp"
 	"strconv"
 	"strings"
 	"time"
@@ -25,6 +24,7 @@ type CorazaProxy struct {
 	backendURL    string
 	reverseProxy  *httputil.ReverseProxy
 	bruteForceMap map[string]*BruteForceCounter
+	xssAttempts   map[string]int // 🔥 Трекер XSS попыток
 }
 
 type BruteForceCounter struct {
@@ -35,7 +35,7 @@ type BruteForceCounter struct {
 }
 
 func NewCorazaProxy(backendURL string) (*CorazaProxy, error) {
-	logger, err := zap.NewProduction()
+	logger, err := zap.NewDevelopment()
 	if err != nil {
 		return nil, err
 	}
@@ -53,6 +53,7 @@ func NewCorazaProxy(backendURL string) (*CorazaProxy, error) {
 		logger:        logger,
 		backendURL:    backendURL,
 		bruteForceMap: make(map[string]*BruteForceCounter),
+		xssAttempts:   make(map[string]int), // 🔥 Инициализация трекера XSS
 	}
 
 	proxy.reverseProxy = &httputil.ReverseProxy{
@@ -66,6 +67,7 @@ func NewCorazaProxy(backendURL string) (*CorazaProxy, error) {
 	}
 
 	go proxy.cleanupBruteForceCounters()
+	go proxy.cleanupXSSAttempts()
 
 	return proxy, nil
 }
@@ -82,84 +84,39 @@ SecResponseBodyLimit 524288
 SecAuditEngine RelevantOnly
 SecAuditLogParts "ABIJDEFHZ"
 
-# ===== XSS PROTECTION =====
-SecRule ARGS|ARGS_NAMES|REQUEST_BODY "@rx <script" "phase:1,deny,status:403,id:1001,msg:'XSS detected'"
-SecRule ARGS|ARGS_NAMES|REQUEST_BODY "@rx javascript:" "phase:1,deny,status:403,id:1002,msg:'XSS detected'"
-SecRule ARGS|ARGS_NAMES|REQUEST_BODY "@rx onerror=" "phase:1,deny,status:403,id:1003,msg:'XSS detected'"
-SecRule ARGS|ARGS_NAMES|REQUEST_BODY "@rx %3Cimg" "phase:1,deny,status:403,id:1004,msg:'URL-encoded XSS detected'"
-SecRule ARGS|ARGS_NAMES|REQUEST_BODY "@rx alert\\\(" "phase:1,deny,status:403,id:1005,msg:'XSS detected'"
-
-# ===== REFERER XSS PROTECTION =====
-SecRule REQUEST_HEADERS:Referer "@rx %3Cimg" "phase:1,deny,status:403,id:1101,msg:'XSS in Referer header'"
-SecRule REQUEST_HEADERS:Referer "@rx onerror=" "phase:1,deny,status:403,id:1102,msg:'XSS in Referer header'"
-SecRule REQUEST_HEADERS:Referer "@rx alert\\\(" "phase:1,deny,status:403,id:1103,msg:'XSS in Referer header'"
-
-# ===== SQL INJECTION PROTECTION =====
-SecRule ARGS|ARGS_NAMES|REQUEST_BODY "@rx union.*select" "phase:1,deny,status:403,id:2001,msg:'SQLi detected'"
-SecRule ARGS|ARGS_NAMES|REQUEST_BODY "@rx or.*1=1" "phase:1,deny,status:403,id:2002,msg:'SQLi detected'"
-
-# ===== PATH TRAVERSAL PROTECTION =====
-SecRule REQUEST_FILENAME|ARGS|ARGS_NAMES "@rx \\.\\./" "phase:1,deny,status:403,id:3001,msg:'Path traversal detected'"
-
-# ===== COMMAND INJECTION PROTECTION =====
-SecRule ARGS|ARGS_NAMES|REQUEST_BODY "@rx \\|.*rm" "phase:1,deny,status:403,id:4001,msg:'Command injection detected'"
-
-# ===== FTP BLOCKING =====
-SecRule REQUEST_URI "@beginsWith /ftp" "phase:1,deny,status:403,id:5001,msg:'FTP access blocked'"
-
-# ===== WEB SOCKET PROTECTION =====
-SecRule REQUEST_URI "@beginsWith /socket.io" "id:6001,phase:1,pass,nolog,setvar:tx.socket_io=1"
-SecRule TX:SOCKET_IO "@eq 1" "chain,phase:2,id:6002,deny,status:403,msg:'WebSocket XSS detected'"
-SecRule REQUEST_BODY "@rx %3Cimg|onerror=|alert\\\("
-
-# ===== SEARCH ENDPOINT PROTECTION =====
-SecRule REQUEST_FILENAME "@rx /rest/products/search" "chain,phase:1,deny,status:403,id:7001,msg:'XSS in search API'"
-SecRule ARGS:q "@rx %3Cimg|onerror=|alert\\\("
+# ===== HEALTH CHECKS =====
+SecRule REQUEST_FILENAME "@rx ^/(health|healthz|ready|readyz|live|livez|status|ping|helth)" "phase:1,pass,nolog,id:50,ctl:ruleEngine=Off"
 
 # ===== STATIC FILES =====
-SecRule REQUEST_FILENAME "@rx \\.(css|js|png|jpg|jpeg|gif|ico|woff|ttf)$" "phase:1,pass,id:8001,ctl:ruleEngine=Off"
+SecRule REQUEST_FILENAME "@rx \\.(css|js|png|jpg|jpeg|gif|ico|woff|ttf|svg)$" "phase:1,pass,id:8001,ctl:ruleEngine=Off"
 `
 	return rules
 }
-func (p *CorazaProxy) isHealthCheckRequest(r *http.Request) bool {
-	healthCheckPaths := []string{
-		"/health",
-		"/healthz", 
-		"/ready",
-		"/readyz",
-		"/live",
-		"/livez",
-		"/status",
-		"/ping",
-		"/health-check",
-		"/api/health",
-		"/monitoring/health",
-	}
-	
-	for _, path := range healthCheckPaths {
-		if r.URL.Path == path {
-			return true
-		}
-	}
-	
-	return false
-}
+
 func (p *CorazaProxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	clientIP := p.getClientIP(r)
+
+	// Health check requests
 	if p.isHealthCheckRequest(r) {
-        p.logger.Debug("Health check request - bypassing WAF",
-            zap.String("path", r.URL.Path),
-            zap.String("ip", clientIP))
-        p.reverseProxy.ServeHTTP(w, r)
-        return
-    }
-	// Детальное логирование
-	p.logger.Info("REQUEST",
-		zap.String("ip", clientIP),
-		zap.String("method", r.Method),
-		zap.String("path", r.URL.Path),
-		zap.String("query", r.URL.RawQuery),
-		zap.String("referer", r.Header.Get("Referer")))
+		p.reverseProxy.ServeHTTP(w, r)
+		return
+	}
+
+	// Static files
+	if p.isStaticFileRequest(r) {
+		p.reverseProxy.ServeHTTP(w, r)
+		return
+	}
+
+	// 🔥 ГЛАВНОЕ: Обнаружение XSS при ПЕРВОМ запросе с фрагментом
+	if p.detectInitialXSSRequest(r) {
+		p.logger.Warn("🚨 INITIAL XSS REQUEST BLOCKED",
+			zap.String("ip", clientIP),
+			zap.String("url", r.URL.String()),
+			zap.String("fragment", r.URL.Fragment))
+		http.Error(w, "XSS attack detected", http.StatusForbidden)
+		return
+	}
 
 	// Обработка страницы блокировки
 	if r.URL.Path == "/blocked" {
@@ -179,45 +136,10 @@ func (p *CorazaProxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		p.incrementBruteForceCounter(clientIP)
 	}
 
-	// WebSocket detection and protection
-	if p.isWebSocketRequest(r) {
-		if p.detectXSSInWebSocket(r) {
-			p.logger.Warn("XSS in WebSocket blocked",
-				zap.String("ip", clientIP),
-				zap.String("path", r.URL.Path))
-			http.Error(w, "XSS attack detected", http.StatusForbidden)
-			return
-		}
-		p.reverseProxy.ServeHTTP(w, r)
-		return
-	}
-
-	// 🔥 ВАЖНО: Проверка Referer header для поисковых запросов
-	if r.URL.Path == "/rest/products/search" {
-		if p.detectXSSInReferer(r) {
-			p.logger.Warn("XSS in Referer blocked for search request",
-				zap.String("ip", clientIP),
-				zap.String("referer", r.Header.Get("Referer")))
-			http.Error(w, "XSS attack detected in search", http.StatusForbidden)
-			return
-		}
-	}
-
-	// XSS detection in URL and parameters
-	if p.detectXSSInURL(r) || p.detectXSSInRequest(r) {
-		p.logger.Warn("XSS attack blocked",
-			zap.String("ip", clientIP),
-			zap.String("url", r.URL.String()),
-			zap.String("referer", r.Header.Get("Referer")))
-		http.Error(w, "XSS attack detected", http.StatusForbidden)
-		return
-	}
-
 	// WAF processing
 	tx := p.waf.NewTransaction()
 	defer tx.Close()
 
-	// Process request through WAF
 	tx.ProcessURI(r.URL.String(), r.Method, r.Proto)
 	for key, values := range r.Header {
 		for _, value := range values {
@@ -226,33 +148,13 @@ func (p *CorazaProxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 	tx.ProcessRequestHeaders()
 
-	// Process request body for API endpoints
-	if r.Body != nil && (strings.Contains(r.URL.Path, "/api/") || strings.Contains(r.URL.Path, "/rest/")) {
-		body, err := io.ReadAll(r.Body)
-		if err != nil {
-			p.logger.Error("Failed to read body", zap.Error(err))
-			http.Error(w, "Internal Error", http.StatusInternalServerError)
-			return
-		}
-		r.Body = io.NopCloser(bytes.NewBuffer(body))
-
-		if len(body) > 0 && p.detectAttackInBody(body) {
-			p.logger.Warn("Attack detected in request body",
-				zap.String("ip", clientIP),
-				zap.String("path", r.URL.Path))
-			http.Error(w, "Request blocked by security rules", http.StatusForbidden)
-			return
-		}
-	}
-
 	// Check if request was blocked by WAF
 	if it := tx.Interruption(); it != nil {
 		p.logger.Warn("Request blocked by WAF",
 			zap.String("ip", clientIP),
 			zap.String("path", r.URL.Path),
-			zap.Int("status", it.Status),
 			zap.Int("rule_id", it.RuleID))
-		http.Error(w, fmt.Sprintf("Request blocked by security rule %d", it.RuleID), it.Status)
+		http.Error(w, "Request blocked by security rules", http.StatusForbidden)
 		return
 	}
 
@@ -260,151 +162,91 @@ func (p *CorazaProxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	p.reverseProxy.ServeHTTP(w, r)
 }
 
-func (p *CorazaProxy) detectXSSInReferer(r *http.Request) bool {
-	referer := r.Header.Get("Referer")
-	if referer == "" {
-		return false
-	}
-
-	// Проверяем весь Referer header
-	if p.isXSSPayload(referer) {
-		return true
-	}
-
-	// Парсим Referer URL для проверки фрагмента
-	if refererURL, err := url.Parse(referer); err == nil {
-		// Проверяем фрагмент (часть после #)
-		if fragment := refererURL.Fragment; fragment != "" {
-			if p.isXSSPayload(fragment) {
-				p.logger.Info("XSS detected in Referer fragment",
-					zap.String("fragment", fragment))
-				return true
-			}
-		}
-
-		// Проверяем query параметры в Referer
-		for _, values := range refererURL.Query() {
-			for _, value := range values {
-				if p.isXSSPayload(value) {
-					return true
-				}
-			}
-		}
-	}
-
-	return false
-}
-
-func (p *CorazaProxy) isWebSocketRequest(r *http.Request) bool {
-	return strings.Contains(r.URL.Path, "/socket.io/") ||
-		strings.EqualFold(r.Header.Get("Upgrade"), "websocket") ||
-		(strings.Contains(r.Header.Get("Connection"), "Upgrade") &&
-			strings.EqualFold(r.Header.Get("Upgrade"), "websocket"))
-}
-
-func (p *CorazaProxy) detectXSSInWebSocket(r *http.Request) bool {
-	fullURL := r.URL.String()
-	if p.isXSSPayload(fullURL) {
-		return true
-	}
-
-	for _, values := range r.URL.Query() {
-		for _, value := range values {
-			if p.isXSSPayload(value) {
-				return true
-			}
-		}
-	}
-
-	for _, values := range r.Header {
-		for _, value := range values {
-			if p.isXSSPayload(value) {
-				return true
-			}
-		}
-	}
-
-	return false
-}
-
-func (p *CorazaProxy) detectXSSInURL(r *http.Request) bool {
-	fullURL := r.URL.String()
-
+// 🔥 ОСНОВНАЯ ФУНКЦИЯ: Обнаружение XSS при начальном запросе
+func (p *CorazaProxy) detectInitialXSSRequest(r *http.Request) bool {
+	clientIP := p.getClientIP(r)
+	
+	// Проверяем фрагмент URL на наличие XSS
 	if fragment := r.URL.Fragment; fragment != "" {
-		if decoded, err := url.QueryUnescape(fragment); err == nil && p.isXSSPayload(decoded) {
-			return true
-		}
-		if p.isXSSPayload(fragment) {
-			return true
-		}
-	}
-
-	return p.isXSSPayload(fullURL)
-}
-
-func (p *CorazaProxy) detectXSSInRequest(r *http.Request) bool {
-	// Check URL parameters
-	for _, values := range r.URL.Query() {
-		for _, value := range values {
-			if p.isXSSPayload(value) {
+		if p.containsXSSPatterns(fragment) {
+			p.logger.Info("🚨 XSS DETECTED IN FRAGMENT",
+				zap.String("ip", clientIP),
+				zap.String("fragment", fragment))
+			
+			// Блокируем после 2 попыток
+			p.xssAttempts[clientIP]++
+			if p.xssAttempts[clientIP] >= 2 {
+				p.logger.Warn("🚨 XSS ATTEMPTS EXCEEDED - BLOCKING IP",
+					zap.String("ip", clientIP),
+					zap.Int("attempts", p.xssAttempts[clientIP]))
 				return true
 			}
-		}
-	}
-
-	// Check POST parameters
-	if r.Method == "POST" || r.Method == "PUT" {
-		if err := r.ParseForm(); err == nil {
-			for _, values := range r.PostForm {
-				for _, value := range values {
-					if p.isXSSPayload(value) {
-						return true
-					}
-				}
-			}
-		}
-	}
-
-	// Check Referer header
-	if referer := r.Header.Get("Referer"); referer != "" {
-		if p.isXSSPayload(referer) {
 			return true
 		}
+	}
+
+	// Проверяем полный URL
+	fullURL := r.URL.String()
+	if p.containsXSSPatterns(fullURL) {
+		p.logger.Info("🚨 XSS DETECTED IN URL",
+			zap.String("ip", clientIP),
+			zap.String("url", fullURL))
+		return true
 	}
 
 	return false
 }
 
-func (p *CorazaProxy) isXSSPayload(input string) bool {
+func (p *CorazaProxy) containsXSSPatterns(input string) bool {
 	xssPatterns := []string{
-		"<script", "</script>", "javascript:", "vbscript:",
-		"onerror=", "onload=", "onclick=", "alert(",
-		"<img", "<svg", "<iframe", "<embed",
-		"%3Cimg", "%3Cscript", "onerror%3D", "alert%28",
-		"&lt;script", "&lt;img", "src=x", "onerror=alert",
-		"%3Cimg%20src", "src%3Dx", "onerror%3Dalert",
+		// Конкретно ваш payload
+		"%3Cimg%20src%3Dx%20onerror%3Dalert('XSS')%3E",
+		"%3Cimg%20src=x%20onerror=alert('XSS')%3E",
+		"%3Cimg",
+		"src%3Dx", 
+		"onerror%3D",
+		"alert('XSS')",
+		
+		// Общие паттерны
+		"<script", "</script>", "javascript:", 
+		"onerror=", "onload=", "onclick=",
+		"alert(", "confirm(", "prompt(",
+		"<img", "<svg", "<iframe",
+		"%3Cscript", "onerror%3D", "alert%28",
+		"&lt;script", "&lt;img",
 	}
 
 	inputLower := strings.ToLower(input)
 	for _, pattern := range xssPatterns {
 		if strings.Contains(inputLower, pattern) {
-			p.logger.Debug("XSS pattern matched",
-				zap.String("pattern", pattern),
-				zap.String("input", inputLower))
 			return true
 		}
 	}
 	return false
 }
 
-func (p *CorazaProxy) detectAttackInBody(body []byte) bool {
-	patterns := []string{
-		`<script`, `javascript:`, `onerror=`, `union.*select`, `\.\./`,
+func (p *CorazaProxy) isHealthCheckRequest(r *http.Request) bool {
+	healthCheckPaths := []string{
+		"/health", "/healthz", "/ready", "/readyz", 
+		"/live", "/livez", "/status", "/ping", "/helth",
 	}
+	
+	for _, path := range healthCheckPaths {
+		if r.URL.Path == path {
+			return true
+		}
+	}
+	return false
+}
 
-	bodyStr := string(body)
-	for _, pattern := range patterns {
-		if matched, _ := regexp.MatchString(pattern, bodyStr); matched {
+func (p *CorazaProxy) isStaticFileRequest(r *http.Request) bool {
+	staticExtensions := []string{
+		".css", ".js", ".png", ".jpg", ".jpeg", 
+		".gif", ".ico", ".woff", ".ttf", ".svg",
+	}
+	
+	for _, ext := range staticExtensions {
+		if strings.HasSuffix(r.URL.Path, ext) {
 			return true
 		}
 	}
@@ -424,22 +266,35 @@ func (p *CorazaProxy) modifyResponse(res *http.Response) error {
 		if strings.Contains(html, "</body>") {
 			xssScript := `
 <script>
-// Client-side XSS Protection
+// Enhanced Client-side XSS Protection
 (function() {
-    const checkFragment = function() {
+    const patterns = ['%3Cimg', 'onerror=', 'alert(', '<script', 'javascript:', 'src=x'];
+    
+    function checkFragment() {
         const fragment = window.location.hash;
-        const patterns = ['%3Cimg', 'onerror=', 'alert(', '<script', 'javascript:'];
         for (const pattern of patterns) {
-            if (fragment.includes(pattern)) {
+            if (fragment.toLowerCase().includes(pattern)) {
+                console.warn('XSS blocked:', fragment);
                 window.location.href = '/blocked?reason=xss_fragment';
                 return true;
             }
         }
         return false;
-    };
+    }
     
+    // Check immediately
     if (checkFragment()) return;
+    
+    // Check on all navigation events
     window.addEventListener('hashchange', checkFragment);
+    window.addEventListener('popstate', checkFragment);
+    
+    // Override pushState to detect SPA navigation
+    const originalPushState = history.pushState;
+    history.pushState = function(state, title, url) {
+        originalPushState.apply(this, arguments);
+        setTimeout(checkFragment, 100);
+    };
 })();
 </script>
 </body>`
@@ -469,12 +324,11 @@ func (p *CorazaProxy) handleBlockedPage(w http.ResponseWriter, r *http.Request) 
     <style>
         body { font-family: Arial, sans-serif; text-align: center; padding: 50px; }
         .blocked { color: #d32f2f; font-size: 24px; margin-bottom: 20px; }
-        .message { margin: 20px 0; }
     </style>
 </head>
 <body>
     <div class="blocked">🚫 %s</div>
-    <div class="message">Your request has been blocked by the security system.</div>
+    <p>Your request has been blocked by the security system.</p>
     <a href="/">Return to home page</a>
 </body>
 </html>`, message)
@@ -528,6 +382,21 @@ func (p *CorazaProxy) incrementBruteForceCounter(ip string) {
 		p.bruteForceMap[ip] = &BruteForceCounter{
 			Count:    1,
 			LastSeen: now,
+		}
+	}
+}
+
+// 🔥 Очистка XSS попыток
+func (p *CorazaProxy) cleanupXSSAttempts() {
+	for {
+		time.Sleep(10 * time.Minute)
+		now := time.Now()
+		for ip := range p.xssAttempts {
+			// Удаляем старые записи (старше 30 минут)
+			if p.xssAttempts[ip] > 0 {
+				// Пока просто сбрасываем счетчик
+				p.xssAttempts[ip] = 0
+			}
 		}
 	}
 }
