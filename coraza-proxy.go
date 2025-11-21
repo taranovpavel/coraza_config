@@ -76,9 +76,8 @@ func NewCorazaProxy(backendURL string) (*CorazaProxy, error) {
 }
 
 func loadCustomRules() string {
-	// Базовые настройки Coraza
-	rules := `
-# Basic configuration
+    // Базовые настройки Coraza
+    rules := `
 SecRuleEngine On
 SecRequestBodyAccess On
 SecRequestBodyLimit 134217728
@@ -86,41 +85,32 @@ SecResponseBodyAccess On
 SecResponseBodyMimeType text/plain text/html text/xml
 SecResponseBodyLimit 524288
 
-# Audit engine configuration  
 SecAuditEngine RelevantOnly
 SecAuditLogParts "ABIJDEFHZ"
 
-# ===== DISABLE ANNOYING DEFAULT RULES =====
 SecRuleUpdateTargetById 920280 "!REQUEST_HEADERS:Host"
 SecRuleUpdateTargetById 920350 "!REQUEST_HEADERS:Host" 
 SecRuleUpdateTargetById 920270 "!REQUEST_HEADERS:User-Agent"
 SecRuleUpdateTargetById 933151 "!ARGS:email"
 SecRuleUpdateTargetById 932150 "!ARGS:email"
 
-# ===== ENHANCED XSS PROTECTION - FIXED =====
-# Rule 1: Basic XSS patterns
 SecRule ARGS|ARGS_NAMES|REQUEST_BODY|REQUEST_HEADERS "@rx (?i)(<script[^>]*>|</script>|javascript:\s*|vbscript:\s*|\balert\s*\(\s*|eval\s*\(\s*|document\.(cookie|location|write))" \
     "phase:1,deny,status:403,id:12001,msg:'XSS attack detected - basic patterns',tag:'attack-xss'"
 
-# Rule 2: Event handlers - FIXED for <img onerror=>
 SecRule ARGS|ARGS_NAMES|REQUEST_BODY|REQUEST_HEADERS "@rx (?i)(\bon\w+\s*=|\bonafterprint\s*=|\bonbeforeprint\s*=|\bonbeforeunload\s*=|\bonerror\s*=|\bonhashchange\s*=|\bonload\s*=|\bonmessage\s*=|\bonoffline\s*=|\bononline\s*=|\bonpagehide\s*=|\bonpageshow\s*=|\bonpopstate\s*=|\bonresize\s*=|\bonstorage\s*=|\bonunload\s*=|\bonblur\s*=|\bonchange\s*=|\boncontextmenu\s*=|\bonfocus\s*=|\boninput\s*=|\boninvalid\s*=|\bonreset\s*=|\bonsearch\s*=|\bonselect\s*=|\bonsubmit\s*=|\bonkeydown\s*=|\bonkeypress\s*=|\bonkeyup\s*=|\bonclick\s*=|\bondblclick\s*=|\bonmousedown\s*=|\bonmousemove\s*=|\bonmouseout\s*=|\bonmouseover\s*=|\bonmouseup\s*=|\bonmousewheel\s*=|\bonwheel\s*=|\bondrag\s*=|\bondragend\s*=|\bondragenter\s*=|\bondragleave\s*=|\bondragover\s*=|\bondragstart\s*=|\bondrop\s*=|\bonscroll\s*=|\boncopy\s*=|\boncut\s*=|\bonpaste\s*=)" \
     "phase:1,deny,status:403,id:12002,msg:'XSS attack detected - event handlers',tag:'attack-xss'"
 
-# Rule 3: HTML tags with attributes
 SecRule ARGS|ARGS_NAMES|REQUEST_BODY|REQUEST_HEADERS "@rx (?i)(<img[^>]*>|<iframe[^>]*>|<embed[^>]*>|<object[^>]*>|<link[^>]*>|<meta[^>]*>|<form[^>]*>|<input[^>]*>|<button[^>]*>|<select[^>]*>|<textarea[^>]*>|<svg[^>]*>|<math[^>]*>)" \
     "chain,phase:1,deny,status:403,id:12003,msg:'XSS attack detected - HTML tags',tag:'attack-xss'"
 SecRule MATCHED_VAR "@rx (?i)(src\s*=|href\s*=|data\s*=|action\s*=|on\w+\s*=)" 
 
-# Rule 4: Encoded XSS attempts
 SecRule ARGS|ARGS_NAMES|REQUEST_BODY|REQUEST_HEADERS "@rx (?i)(&lt;script|&#x3C;script|%3Cscript|javascript&colon;|&#x6A;avascript|&amp;alert)" \
     "phase:1,deny,status:403,id:12004,msg:'XSS attack detected - encoded payload',tag:'attack-xss'"
 
-# Rule 5: Specific search input validation
 SecRule ARGS:q "@rx ([<>]|on\w+\s*=)" \
     "chain,phase:1,deny,status:400,id:12005,msg:'XSS in search query detected',tag:'attack-xss',tag:'search'"
 SecRule REQUEST_FILENAME "@rx /rest/products/search"
 
-# ===== WEB SOCKET/SOCKET.IO PROTECTION =====
 SecRule REQUEST_URI "@beginsWith /socket.io" \
     "id:5000,phase:1,pass,nolog,\
     ctl:ruleRemoveTargetById=920420;REQUEST_HEADERS:Content-Type,\
@@ -128,70 +118,57 @@ SecRule REQUEST_URI "@beginsWith /socket.io" \
     ctl:ruleRemoveById=949110,\
     setvar:tx.socket_io=1"
 
-# WebSocket XSS Protection
 SecRule TX:SOCKET_IO "@eq 1" \
     "chain,phase:2,id:5001,deny,status:403,msg:'WebSocket XSS detected',tag:'attack-xss',tag:'websocket'"
 SecRule REQUEST_BODY "@rx (?i)(<script[^>]*>|</script>|javascript:|on\w+\s*=|\balert\s*\(|eval\s*\(|document\.)" 
 
-# WebSocket SQL Injection Protection  
 SecRule TX:SOCKET_IO "@eq 1" \
     "chain,phase:2,id:5002,deny,status:403,msg:'WebSocket SQL Injection detected',tag:'attack-sqli',tag:'websocket'"
 SecRule REQUEST_BODY "@rx (?i)(union\s+select|or\s+1=1|drop\s+table|sleep\s*\(\s*\d+\s*|insert\s+into|update\s+\w+\s+set|delete\s+from)" 
 
-# ===== SQL INJECTION PROTECTION =====
 SecRule ARGS|ARGS_NAMES|REQUEST_BODY|REQUEST_HEADERS "@rx (?i)(union\s+select|or\s+['\" ]?1=1|drop\s+table|sleep\s*\(\s*\d+\s*|insert\s+into|update\s+\w+\s+set|delete\s+from|benchmark\s*\(|waitfor\s+delay)" \
     "phase:1,deny,status:403,id:11001,msg:'SQL Injection detected',tag:'attack-sqli'"
 
-# ===== DIRECTORY TRAVERSAL PROTECTION =====
 SecRule REQUEST_FILENAME|ARGS|ARGS_NAMES "@rx (\.\./|\.\.\\|/etc/passwd|/etc/shadow|/windows/win\.ini|\\windows\\win\.ini|/ftp)" \
     "phase:1,deny,status:403,id:13001,msg:'Path traversal detected',tag:'attack-traversal'"
 
-# ===== COMMAND INJECTION PROTECTION =====
 SecRule ARGS|ARGS_NAMES|REQUEST_BODY "@rx ([|&;`]\s*(rm\s+-rf|wget\s+|curl\s+|bash\s*$|sh\s*$|nc\s+|python\s+-c|perl\s+-e|cmd\.exe|powershell))" \
     "phase:1,deny,status:403,id:14001,msg:'Command injection detected',tag:'attack-cmd'"
 
-# ===== BRUTE FORCE PROTECTION =====
 SecRule IP:BF_COUNTER "@gt 10" \
     "phase:1,deny,status:429,id:15001,msg:'Brute force attack detected',tag:'attack-bruteforce',setvar:IP.BF_BLOCKED=1,expirevar:IP.BF_BLOCKED=3600"
 
 SecRule REQUEST_FILENAME "@rx /rest/user/(login|reset)" \
     "phase:1,pass,id:15002,msg:'Login attempt',setvar:IP.BF_COUNTER=+1,expirevar:IP.BF_COUNTER=300"
 
-# ===== SENSITIVE DATA LEAKAGE PROTECTION =====
 SecRule RESPONSE_BODY "@rx (?i)(\"password\"\s*:\s*\"[^\"]{6,}\"|\"token\"\s*:\s*\"[^\"]{10,}\"|\"apiKey\"\s*:\s*\"[^\"]+\"|\"secret\"\s*:\s*\"[^\"]+\")" \
     "phase:4,deny,status:500,id:16001,msg:'Sensitive data leakage detected',tag:'data-leakage'"
 
-# ===== RESPONSE XSS DETECTION =====
 SecRule RESPONSE_BODY "@rx <script[^>]*>.*?</script>" \
     "phase:4,deny,status:500,id:16002,msg:'XSS in response detected',tag:'xss-response'"
 
 SecRule RESPONSE_BODY "@rx on\w+\s*=\"[^\"]*\"" \
     "phase:4,deny,status:500,id:16003,msg:'Dangerous HTML attributes in response',tag:'xss-response'"
 
-# ===== JUICE SHOP SPECIFIC RULES =====
-# Allow search but with XSS protection
 SecRule REQUEST_FILENAME "@rx ^/rest/(basket|products)/" \
     "phase:1,pass,id:24002,msg:'Juice Shop API',\
     ctl:ruleRemoveTargetById=911100;REQUEST_METHOD"
 
-# Feedback API - more permissive for learning
 SecRule REQUEST_FILENAME "@streq /api/Feedbacks" \
     "phase:1,pass,id:24003,msg:'Feedback API',\
     ctl:ruleRemoveById=12001,\
     ctl:ruleRemoveById=11001"
 
-# Allow Authorization header for API
 SecRule REQUEST_FILENAME "@rx ^/api/" \
     "phase:1,pass,id:24005,msg:'Allow Authorization header',\
     ctl:ruleRemoveTargetById=920280;REQUEST_HEADERS:Authorization"
 
-# ===== PERFORMANCE OPTIMIZATION =====
 SecRule REQUEST_FILENAME "@rx \.(css|js|png|jpg|jpeg|gif|ico|woff|woff2|ttf|eot|svg)$" \
     "phase:1,pass,id:30001,msg:'Static file',\
     ctl:ruleEngine=Off"
 `
 
-	return rules
+    return rules
 }
 
 func logError(error types.MatchedRule) {
