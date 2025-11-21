@@ -10,6 +10,7 @@ import (
 	"net/http/httputil"
 	"net/url"
 	"os"
+	"strconv"
 	"regexp"
 	"strings"
 	"time"
@@ -275,9 +276,7 @@ func (p *CorazaProxy) detectAttackInBody(body []byte) bool {
 	return false
 }
 
-func (p *CorazaProxy) modifyResponse(res *http.Response) error {
-    return nil
-}
+
 func (p *CorazaProxy) errorHandler(w http.ResponseWriter, r *http.Request, err error) {
 	p.logger.Error("Proxy error", zap.Error(err))
 	http.Error(w, "Bad Gateway", http.StatusBadGateway)
