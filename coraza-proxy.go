@@ -292,7 +292,7 @@ func (p *CorazaProxy) detectResponseXSS(body []byte) bool {
 }
 
 func main() {
-	backendURL := "http://localhost:3000"
+	backendURL := "192.168.0.185:3000"
 	if len(os.Args) > 1 {
 		backendURL = os.Args[1]
 	}
