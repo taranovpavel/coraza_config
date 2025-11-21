@@ -2,7 +2,6 @@ package main
 
 import (
 	"bytes"
-	"fmt"
 	"io"
 	"log"
 	"net"
@@ -153,33 +152,23 @@ func (p *CorazaProxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	tx := p.waf.NewTransaction()
 	defer tx.Close()
 
-	for key, values := range r.Header {
-		for _, value := range values {
-			tx.AddRequestHeader(key, value)
-		}
+	// Process request through Coraza
+	_, err := tx.ProcessRequest(r)
+	if err != nil {
+		p.logger.Error("Failed to process request", zap.Error(err))
+		http.Error(w, "Internal Error", http.StatusInternalServerError)
+		return
 	}
 
-	if r.Body != nil {
-		body, err := io.ReadAll(r.Body)
-		if err != nil {
-			p.logger.Error("Failed to read body", zap.Error(err))
-			http.Error(w, "Internal Error", http.StatusInternalServerError)
-			return
-		}
-		r.Body = io.NopCloser(bytes.NewBuffer(body))
-		tx.RequestBodyWriter().Write(body)
-	}
-
-	tx.ProcessRequestURI(r.URL.String())
-	tx.ProcessRequestMethod(r.Method)
-	tx.ProcessConnection(clientIP, 0, "", 0)
-
+	// Check if request was blocked
 	if tx.Interruption() != nil {
+		interruption := tx.Interruption()
 		p.logger.Warn("Request blocked",
 			zap.String("ip", clientIP),
 			zap.String("path", r.URL.Path),
-			zap.String("rule", tx.Interruption().RuleID()))
-		http.Error(w, "Forbidden", http.StatusForbidden)
+			zap.Int("status", interruption.Status),
+			zap.String("reason", interruption.Reason))
+		http.Error(w, interruption.Reason, interruption.Status)
 		return
 	}
 
