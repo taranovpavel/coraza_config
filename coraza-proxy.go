@@ -196,28 +196,8 @@ func (p *CorazaProxy) detectAttackInBody(body []byte) bool {
 }
 
 func (p *CorazaProxy) modifyResponse(res *http.Response) error {
-	// Simple response modification
-	contentType := res.Header.Get("Content-Type")
-	if strings.Contains(contentType, "text/html") || strings.Contains(contentType, "application/json") {
-		body, err := io.ReadAll(res.Body)
-		if err != nil {
-			return err
-		}
-		res.Body.Close()
-
-		// Simple XSS detection in response
-		if p.detectResponseXSS(body) {
-			p.logger.Warn("Potential XSS in response detected")
-		}
-
-		// Put the body back
-		res.Body = io.NopCloser(bytes.NewBuffer(body))
-		res.ContentLength = int64(len(body))
-		res.Header.Set("Content-Length", strconv.Itoa(len(body)))
-	}
-	return nil
+    return nil
 }
-
 func (p *CorazaProxy) errorHandler(w http.ResponseWriter, r *http.Request, err error) {
 	p.logger.Error("Proxy error", zap.Error(err))
 	http.Error(w, "Bad Gateway", http.StatusBadGateway)
