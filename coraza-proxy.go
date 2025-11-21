@@ -324,7 +324,7 @@ func (p *CorazaProxy) detectResponseXSS(body []byte) bool {
 }
 func (p *CorazaProxy) detectXSSInRequest(r *http.Request) bool {
     // Check URL parameters
-    for key, values := range r.URL.Query() {
+    for _, values := range r.URL.Query() {
         for _, value := range values {
             if p.isXSSPayload(value) {
                 return true
@@ -336,7 +336,7 @@ func (p *CorazaProxy) detectXSSInRequest(r *http.Request) bool {
     if r.Method == "POST" || r.Method == "PUT" {
         // Parse form data
         if err := r.ParseForm(); err == nil {
-            for key, values := range r.PostForm {
+            for _, values := range r.PostForm {
                 for _, value := range values {
                     if p.isXSSPayload(value) {
                         return true
