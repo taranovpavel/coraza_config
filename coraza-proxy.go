@@ -14,7 +14,6 @@ import (
 	"time"
 
 	"github.com/corazawaf/coraza/v3"
-	"github.com/corazawaf/coraza/v3/types"
 	"go.uber.org/zap"
 )
 
@@ -41,7 +40,6 @@ func NewCorazaProxy(backendURL string) (*CorazaProxy, error) {
 
 	waf, err := coraza.NewWAF(
 		coraza.NewWAFConfig().
-			WithErrorCallback(logError).
 			WithDirectives(loadCustomRules()),
 	)
 	if err != nil {
@@ -82,100 +80,70 @@ SecResponseBodyLimit 524288
 SecAuditEngine RelevantOnly
 SecAuditLogParts "ABIJDEFHZ"
 
-SecRuleUpdateTargetById 920280 "!REQUEST_HEADERS:Host"
-SecRuleUpdateTargetById 920350 "!REQUEST_HEADERS:Host"
-SecRuleUpdateTargetById 920270 "!REQUEST_HEADERS:User-Agent"
-SecRuleUpdateTargetById 933151 "!ARGS:email"
-SecRuleUpdateTargetById 932150 "!ARGS:email"
-
+# XSS Protection
 SecRule ARGS|ARGS_NAMES|REQUEST_BODY|REQUEST_HEADERS "@rx (?i)(<script[^>]*>|</script>|javascript:|vbscript:|\balert\s*\(|eval\s*\(|document\.(cookie|location|write))" "phase:1,deny,status:403,id:12001,msg:'XSS attack detected',tag:'attack-xss'"
 
 SecRule ARGS|ARGS_NAMES|REQUEST_BODY|REQUEST_HEADERS "@rx (?i)(\bon\w+\s*=)" "phase:1,deny,status:403,id:12002,msg:'XSS attack detected - event handlers',tag:'attack-xss'"
 
-SecRule ARGS|ARGS_NAMES|REQUEST_BODY|REQUEST_HEADERS "@rx (?i)(<img[^>]*>|<iframe[^>]*>|<embed[^>]*>|<object[^>]*>)" "chain,phase:1,deny,status:403,id:12003,msg:'XSS attack detected - HTML tags',tag:'attack-xss'"
-SecRule MATCHED_VAR "@rx (?i)(src\s*=|href\s*=|on\w+\s*=)"
-
-SecRule ARGS|ARGS_NAMES|REQUEST_BODY|REQUEST_HEADERS "@rx (?i)(&lt;script|%3Cscript|javascript&colon;)" "phase:1,deny,status:403,id:12004,msg:'XSS attack detected - encoded payload',tag:'attack-xss'"
-
-SecRule ARGS:q "@rx ([<>]|on\w+\s*=)" "chain,phase:1,deny,status:400,id:12005,msg:'XSS in search query',tag:'attack-xss'"
-SecRule REQUEST_FILENAME "@rx /rest/products/search"
-
-SecRule REQUEST_URI "@beginsWith /socket.io" "id:5000,phase:1,pass,nolog,setvar:tx.socket_io=1"
-
-SecRule TX:SOCKET_IO "@eq 1" "chain,phase:2,id:5001,deny,status:403,msg:'WebSocket XSS detected',tag:'websocket'"
-SecRule REQUEST_BODY "@rx (?i)(<script|javascript:|on\w+\s*=|\balert\s*\()"
-
-SecRule TX:SOCKET_IO "@eq 1" "chain,phase:2,id:5002,deny,status:403,msg:'WebSocket SQL Injection',tag:'websocket'"
-SecRule REQUEST_BODY "@rx (?i)(union\s+select|or\s+1=1|drop\s+table)"
-
+# SQL Injection Protection
 SecRule ARGS|ARGS_NAMES|REQUEST_BODY|REQUEST_HEADERS "@rx (?i)(union\s+select|or\s+1=1|drop\s+table|sleep\s*\(\s*\d+\s*)" "phase:1,deny,status:403,id:11001,msg:'SQL Injection detected',tag:'attack-sqli'"
 
+# Path Traversal Protection
 SecRule REQUEST_FILENAME|ARGS|ARGS_NAMES "@rx (\.\./|\.\.\\|/etc/passwd)" "phase:1,deny,status:403,id:13001,msg:'Path traversal detected',tag:'attack-traversal'"
 
+# Command Injection Protection
 SecRule ARGS|ARGS_NAMES|REQUEST_BODY "@rx ([|&;]\s*(rm\s+-rf|wget\s+|curl\s+|bash\s*$))" "phase:1,deny,status:403,id:14001,msg:'Command injection detected',tag:'attack-cmd'"
 
-SecRule IP:BF_COUNTER "@gt 10" "phase:1,deny,status:429,id:15001,msg:'Brute force attack',tag:'attack-bruteforce'"
-
-SecRule REQUEST_FILENAME "@rx /rest/user/(login|reset)" "phase:1,pass,id:15002,msg:'Login attempt',setvar:IP.BF_COUNTER=+1"
-
-SecRule RESPONSE_BODY "@rx (?i)(\"password\"\s*:\s*\"[^\"]{6,}\"|\"token\"\s*:\s*\"[^\"]{10,}\")" "phase:4,deny,status:500,id:16001,msg:'Sensitive data leakage',tag:'data-leakage'"
-
-SecRule RESPONSE_BODY "@rx <script[^>]*>.*?</script>" "phase:4,deny,status:500,id:16002,msg:'XSS in response',tag:'xss-response'"
-
-SecRule REQUEST_FILENAME "@rx ^/rest/(basket|products)/" "phase:1,pass,id:24002,msg:'Juice Shop API'"
-
-SecRule REQUEST_FILENAME "@streq /api/Feedbacks" "phase:1,pass,id:24003,msg:'Feedback API'"
-
+# Static files - no inspection
 SecRule REQUEST_FILENAME "@rx \.(css|js|png|jpg|jpeg|gif|ico)$" "phase:1,pass,id:30001,ctl:ruleEngine=Off"
 `
 
 	return rules
 }
 
-func logError(error types.MatchedRule) {
-	log.Printf("Coraza Error: [%s] %s", error.Rule().ID(), error.ErrorLog())
-}
-
 func (p *CorazaProxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	clientIP := p.getClientIP(r)
 
+	// Brute force protection
 	if p.isBruteForceBlocked(clientIP) {
 		p.logger.Warn("Brute force blocked", zap.String("ip", clientIP))
 		http.Error(w, "Too Many Requests", http.StatusTooManyRequests)
 		return
 	}
 
+	// Count login attempts
 	if strings.Contains(r.URL.Path, "/rest/user/login") {
 		p.incrementBruteForceCounter(clientIP)
 	}
 
+	// Create new transaction
 	tx := p.waf.NewTransaction()
 	defer tx.Close()
 
-	// Process request through Coraza
-	_, err := tx.ProcessRequest(r)
+	// Process the request through Coraza
+	it, err := tx.ProcessRequest(r)
 	if err != nil {
 		p.logger.Error("Failed to process request", zap.Error(err))
 		http.Error(w, "Internal Error", http.StatusInternalServerError)
 		return
 	}
 
-	// Check if request was blocked
-	if tx.Interruption() != nil {
-		interruption := tx.Interruption()
-		p.logger.Warn("Request blocked",
+	// Check if request was interrupted (blocked)
+	if it != nil {
+		p.logger.Warn("Request blocked by WAF",
 			zap.String("ip", clientIP),
 			zap.String("path", r.URL.Path),
-			zap.Int("status", interruption.Status),
-			zap.String("reason", interruption.Reason))
-		http.Error(w, interruption.Reason, interruption.Status)
+			zap.Int("status", it.Status))
+		http.Error(w, "Request blocked by security rules", it.Status)
 		return
 	}
 
+	// If request passed WAF, proxy to backend
 	p.reverseProxy.ServeHTTP(w, r)
 }
 
 func (p *CorazaProxy) modifyResponse(res *http.Response) error {
+	// Simple response modification - you can add response body inspection here
 	contentType := res.Header.Get("Content-Type")
 	if strings.Contains(contentType, "text/html") || strings.Contains(contentType, "application/json") {
 		body, err := io.ReadAll(res.Body)
@@ -184,10 +152,12 @@ func (p *CorazaProxy) modifyResponse(res *http.Response) error {
 		}
 		res.Body.Close()
 
+		// Simple XSS detection in response
 		if p.detectResponseXSS(body) {
-			p.logger.Warn("XSS in response")
+			p.logger.Warn("Potential XSS in response detected")
 		}
 
+		// Put the body back
 		res.Body = io.NopCloser(bytes.NewBuffer(body))
 		res.ContentLength = int64(len(body))
 		res.Header.Set("Content-Length", strconv.Itoa(len(body)))
@@ -284,6 +254,6 @@ func main() {
 		port = os.Args[2]
 	}
 
-	log.Printf("Starting proxy on :%s -> %s", port, backendURL)
+	log.Printf("Starting Coraza proxy on port %s, forwarding to %s", port, backendURL)
 	log.Fatal(http.ListenAndServe(":"+port, proxy))
 }
