@@ -89,6 +89,11 @@ SecRule ARGS|ARGS_NAMES|REQUEST_BODY "@rx onerror=" "phase:1,deny,status:403,id:
 SecRule ARGS|ARGS_NAMES|REQUEST_BODY "@rx %3Cimg" "phase:1,deny,status:403,id:1004,msg:'URL-encoded XSS detected'"
 SecRule ARGS|ARGS_NAMES|REQUEST_BODY "@rx alert\\\(" "phase:1,deny,status:403,id:1005,msg:'XSS detected'"
 
+# ===== REFERER XSS PROTECTION =====
+SecRule REQUEST_HEADERS:Referer "@rx %3Cimg" "phase:1,deny,status:403,id:1101,msg:'XSS in Referer header'"
+SecRule REQUEST_HEADERS:Referer "@rx onerror=" "phase:1,deny,status:403,id:1102,msg:'XSS in Referer header'"
+SecRule REQUEST_HEADERS:Referer "@rx alert\\\(" "phase:1,deny,status:403,id:1103,msg:'XSS in Referer header'"
+
 # ===== SQL INJECTION PROTECTION =====
 SecRule ARGS|ARGS_NAMES|REQUEST_BODY "@rx union.*select" "phase:1,deny,status:403,id:2001,msg:'SQLi detected'"
 SecRule ARGS|ARGS_NAMES|REQUEST_BODY "@rx or.*1=1" "phase:1,deny,status:403,id:2002,msg:'SQLi detected'"
@@ -120,13 +125,13 @@ SecRule REQUEST_FILENAME "@rx \\.(css|js|png|jpg|jpeg|gif|ico|woff|ttf)$" "phase
 func (p *CorazaProxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	clientIP := p.getClientIP(r)
 
-	// Детальное логирование для отладки
-	p.logger.Debug("Incoming request",
+	// Детальное логирование
+	p.logger.Info("REQUEST",
 		zap.String("ip", clientIP),
 		zap.String("method", r.Method),
 		zap.String("path", r.URL.Path),
 		zap.String("query", r.URL.RawQuery),
-		zap.String("fragment", r.URL.Fragment))
+		zap.String("referer", r.Header.Get("Referer")))
 
 	// Обработка страницы блокировки
 	if r.URL.Path == "/blocked" {
@@ -159,11 +164,23 @@ func (p *CorazaProxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// 🔥 ВАЖНО: Проверка Referer header для поисковых запросов
+	if r.URL.Path == "/rest/products/search" {
+		if p.detectXSSInReferer(r) {
+			p.logger.Warn("XSS in Referer blocked for search request",
+				zap.String("ip", clientIP),
+				zap.String("referer", r.Header.Get("Referer")))
+			http.Error(w, "XSS attack detected in search", http.StatusForbidden)
+			return
+		}
+	}
+
 	// XSS detection in URL and parameters
 	if p.detectXSSInURL(r) || p.detectXSSInRequest(r) {
 		p.logger.Warn("XSS attack blocked",
 			zap.String("ip", clientIP),
-			zap.String("url", r.URL.String()))
+			zap.String("url", r.URL.String()),
+			zap.String("referer", r.Header.Get("Referer")))
 		http.Error(w, "XSS attack detected", http.StatusForbidden)
 		return
 	}
@@ -215,6 +232,41 @@ func (p *CorazaProxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	p.reverseProxy.ServeHTTP(w, r)
 }
 
+func (p *CorazaProxy) detectXSSInReferer(r *http.Request) bool {
+	referer := r.Header.Get("Referer")
+	if referer == "" {
+		return false
+	}
+
+	// Проверяем весь Referer header
+	if p.isXSSPayload(referer) {
+		return true
+	}
+
+	// Парсим Referer URL для проверки фрагмента
+	if refererURL, err := url.Parse(referer); err == nil {
+		// Проверяем фрагмент (часть после #)
+		if fragment := refererURL.Fragment; fragment != "" {
+			if p.isXSSPayload(fragment) {
+				p.logger.Info("XSS detected in Referer fragment",
+					zap.String("fragment", fragment))
+				return true
+			}
+		}
+
+		// Проверяем query параметры в Referer
+		for _, values := range refererURL.Query() {
+			for _, value := range values {
+				if p.isXSSPayload(value) {
+					return true
+				}
+			}
+		}
+	}
+
+	return false
+}
+
 func (p *CorazaProxy) isWebSocketRequest(r *http.Request) bool {
 	return strings.Contains(r.URL.Path, "/socket.io/") ||
 		strings.EqualFold(r.Header.Get("Upgrade"), "websocket") ||
@@ -263,6 +315,7 @@ func (p *CorazaProxy) detectXSSInURL(r *http.Request) bool {
 }
 
 func (p *CorazaProxy) detectXSSInRequest(r *http.Request) bool {
+	// Check URL parameters
 	for _, values := range r.URL.Query() {
 		for _, value := range values {
 			if p.isXSSPayload(value) {
@@ -271,6 +324,7 @@ func (p *CorazaProxy) detectXSSInRequest(r *http.Request) bool {
 		}
 	}
 
+	// Check POST parameters
 	if r.Method == "POST" || r.Method == "PUT" {
 		if err := r.ParseForm(); err == nil {
 			for _, values := range r.PostForm {
@@ -280,6 +334,13 @@ func (p *CorazaProxy) detectXSSInRequest(r *http.Request) bool {
 					}
 				}
 			}
+		}
+	}
+
+	// Check Referer header
+	if referer := r.Header.Get("Referer"); referer != "" {
+		if p.isXSSPayload(referer) {
+			return true
 		}
 	}
 
@@ -293,11 +354,15 @@ func (p *CorazaProxy) isXSSPayload(input string) bool {
 		"<img", "<svg", "<iframe", "<embed",
 		"%3Cimg", "%3Cscript", "onerror%3D", "alert%28",
 		"&lt;script", "&lt;img", "src=x", "onerror=alert",
+		"%3Cimg%20src", "src%3Dx", "onerror%3Dalert",
 	}
 
 	inputLower := strings.ToLower(input)
 	for _, pattern := range xssPatterns {
 		if strings.Contains(inputLower, pattern) {
+			p.logger.Debug("XSS pattern matched",
+				zap.String("pattern", pattern),
+				zap.String("input", inputLower))
 			return true
 		}
 	}
