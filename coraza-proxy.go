@@ -88,6 +88,32 @@ SecRule ARGS|ARGS_NAMES|REQUEST_BODY "@rx javascript:" "phase:1,deny,status:403,
 
 SecRule ARGS|ARGS_NAMES|REQUEST_BODY "@rx onerror=" "phase:1,deny,status:403,id:1003,msg:'XSS detected'"
 
+# URL-encoded XSS patterns
+SecRule ARGS|ARGS_NAMES|REQUEST_BODY "@rx %3Cscript" "phase:1,deny,status:403,id:1004,msg:'URL-encoded XSS detected'"
+
+SecRule ARGS|ARGS_NAMES|REQUEST_BODY "@rx %3Cimg" "phase:1,deny,status:403,id:1005,msg:'URL-encoded XSS detected'"
+
+SecRule ARGS|ARGS_NAMES|REQUEST_BODY "@rx %3Csvg" "phase:1,deny,status:403,id:1006,msg:'URL-encoded XSS detected'"
+
+SecRule ARGS|ARGS_NAMES|REQUEST_BODY "@rx %3Ciframe" "phase:1,deny,status:403,id:1007,msg:'URL-encoded XSS detected'"
+
+SecRule ARGS|ARGS_NAMES|REQUEST_BODY "@rx onerror%3D" "phase:1,deny,status:403,id:1008,msg:'URL-encoded XSS detected'"
+
+SecRule ARGS|ARGS_NAMES|REQUEST_BODY "@rx alert%28" "phase:1,deny,status:403,id:1009,msg:'URL-encoded XSS detected'"
+
+# Double encoded
+SecRule ARGS|ARGS_NAMES|REQUEST_BODY "@rx %253Cscript" "phase:1,deny,status:403,id:1010,msg:'Double-encoded XSS detected'"
+
+# HTML entities
+SecRule ARGS|ARGS_NAMES|REQUEST_BODY "@rx &lt;script" "phase:1,deny,status:403,id:1011,msg:'HTML entity XSS detected'"
+
+SecRule ARGS|ARGS_NAMES|REQUEST_BODY "@rx &lt;img" "phase:1,deny,status:403,id:1012,msg:'HTML entity XSS detected'"
+
+# Mixed encoding
+SecRule ARGS|ARGS_NAMES|REQUEST_BODY "@rx %3Cimg%20src" "phase:1,deny,status:403,id:1013,msg:'Mixed encoded XSS detected'"
+
+SecRule ARGS|ARGS_NAMES|REQUEST_BODY "@rx src%3Dx%20onerror" "phase:1,deny,status:403,id:1014,msg:'Mixed encoded XSS detected'"
+
 # SQL Injection protection
 SecRule ARGS|ARGS_NAMES|REQUEST_BODY "@rx union.*select" "phase:1,deny,status:403,id:2001,msg:'SQLi detected'"
 
@@ -139,7 +165,15 @@ func (p *CorazaProxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if strings.Contains(r.URL.Path, "/rest/user/login") {
 		p.incrementBruteForceCounter(clientIP)
 	}
-
+	 // XSS check before WAF processing
+    if p.detectXSSInRequest(r) {
+        p.logger.Warn("XSS detected in request", 
+            zap.String("ip", clientIP),
+            zap.String("path", r.URL.Path),
+            zap.String("method", r.Method))
+        http.Error(w, "XSS attack detected", http.StatusForbidden)
+        return
+    }
 	// Create new transaction
 	tx := p.waf.NewTransaction()
 	defer tx.Close()
@@ -288,7 +322,73 @@ func (p *CorazaProxy) detectResponseXSS(body []byte) bool {
 	}
 	return false
 }
+func (p *CorazaProxy) detectXSSInRequest(r *http.Request) bool {
+    // Check URL parameters
+    for key, values := range r.URL.Query() {
+        for _, value := range values {
+            if p.isXSSPayload(value) {
+                return true
+            }
+        }
+    }
 
+    // Check POST parameters
+    if r.Method == "POST" || r.Method == "PUT" {
+        // Parse form data
+        if err := r.ParseForm(); err == nil {
+            for key, values := range r.PostForm {
+                for _, value := range values {
+                    if p.isXSSPayload(value) {
+                        return true
+                    }
+                }
+            }
+        }
+    }
+
+    return false
+}
+
+func (p *CorazaProxy) isXSSPayload(input string) bool {
+    xssPatterns := []string{
+        // Basic patterns
+        "<script", "</script>", "javascript:", 
+        "vbscript:", "data:text/html",
+        
+        // Event handlers
+        "onerror=", "onload=", "onclick=", "onmouseover=",
+        "onfocus=", "onblur=", "onchange=",
+        
+        // Dangerous functions
+        "alert(", "confirm(", "prompt(", "eval(",
+        "document.cookie", "document.write", "document.domain",
+        
+        // HTML tags
+        "<img", "<svg", "<iframe", "<embed", "<object",
+        "<link", "<meta", "<base",
+        
+        // URL encoded
+        "%3Cscript", "%3Cimg", "%3Csvg", "%3Ciframe",
+        "%3Cembed", "%3Cobject", "onerror%3D", "alert%28",
+        
+        // Double encoded
+        "%253Cscript", "%253Cimg",
+        
+        // HTML entities
+        "&lt;script", "&lt;img", "&lt;svg",
+        
+        // CSS
+        "expression(",
+    }
+    
+    inputLower := strings.ToLower(input)
+    for _, pattern := range xssPatterns {
+        if strings.Contains(inputLower, pattern) {
+            return true
+        }
+    }
+    return false
+}
 func main() {
 	backendURL := "192.168.0.185:3000"
 	if len(os.Args) > 1 {
