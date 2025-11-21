@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"fmt"
 	"io"
 	"log"
 	"net"
@@ -81,18 +82,18 @@ SecAuditEngine RelevantOnly
 SecAuditLogParts "ABIJDEFHZ"
 
 # XSS Protection
-SecRule ARGS|ARGS_NAMES|REQUEST_BODY|REQUEST_HEADERS "@rx (?i)(<script[^>]*>|</script>|javascript:|vbscript:|\balert\s*\(|eval\s*\(|document\.(cookie|location|write))" "phase:1,deny,status:403,id:12001,msg:'XSS attack detected',tag:'attack-xss'"
+SecRule ARGS|ARGS_NAMES|REQUEST_BODY|REQUEST_HEADERS "@rx (?i)(<script[^>]*>|</script>|javascript:|\balert\s*\()" "phase:1,deny,status:403,id:12001,msg:'XSS attack detected'"
 
-SecRule ARGS|ARGS_NAMES|REQUEST_BODY|REQUEST_HEADERS "@rx (?i)(\bon\w+\s*=)" "phase:1,deny,status:403,id:12002,msg:'XSS attack detected - event handlers',tag:'attack-xss'"
+SecRule ARGS|ARGS_NAMES|REQUEST_BODY|REQUEST_HEADERS "@rx (?i)(\bon\w+\s*=)" "phase:1,deny,status:403,id:12002,msg:'XSS event handlers detected'"
 
 # SQL Injection Protection
-SecRule ARGS|ARGS_NAMES|REQUEST_BODY|REQUEST_HEADERS "@rx (?i)(union\s+select|or\s+1=1|drop\s+table|sleep\s*\(\s*\d+\s*)" "phase:1,deny,status:403,id:11001,msg:'SQL Injection detected',tag:'attack-sqli'"
+SecRule ARGS|ARGS_NAMES|REQUEST_BODY|REQUEST_HEADERS "@rx (?i)(union\s+select|or\s+1=1|drop\s+table)" "phase:1,deny,status:403,id:11001,msg:'SQL Injection detected'"
 
 # Path Traversal Protection
-SecRule REQUEST_FILENAME|ARGS|ARGS_NAMES "@rx (\.\./|\.\.\\|/etc/passwd)" "phase:1,deny,status:403,id:13001,msg:'Path traversal detected',tag:'attack-traversal'"
+SecRule REQUEST_FILENAME|ARGS|ARGS_NAMES "@rx (\.\./|\.\.\\|/etc/passwd)" "phase:1,deny,status:403,id:13001,msg:'Path traversal detected'"
 
 # Command Injection Protection
-SecRule ARGS|ARGS_NAMES|REQUEST_BODY "@rx ([|&;]\s*(rm\s+-rf|wget\s+|curl\s+|bash\s*$))" "phase:1,deny,status:403,id:14001,msg:'Command injection detected',tag:'attack-cmd'"
+SecRule ARGS|ARGS_NAMES|REQUEST_BODY "@rx (\|\s*rm\s+-rf|\|\s*wget\s+)" "phase:1,deny,status:403,id:14001,msg:'Command injection detected'"
 
 # Static files - no inspection
 SecRule REQUEST_FILENAME "@rx \.(css|js|png|jpg|jpeg|gif|ico)$" "phase:1,pass,id:30001,ctl:ruleEngine=Off"
@@ -120,21 +121,42 @@ func (p *CorazaProxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	tx := p.waf.NewTransaction()
 	defer tx.Close()
 
-	// Process the request through Coraza
-	it, err := tx.ProcessRequest(r)
-	if err != nil {
-		p.logger.Error("Failed to process request", zap.Error(err))
-		http.Error(w, "Internal Error", http.StatusInternalServerError)
-		return
+	// Process request manually
+	// Set request headers
+	for key, values := range r.Header {
+		for _, value := range values {
+			tx.AddRequestHeader(key, value)
+		}
 	}
 
+	// Process request body
+	if r.Body != nil {
+		body, err := io.ReadAll(r.Body)
+		if err != nil {
+			p.logger.Error("Failed to read body", zap.Error(err))
+			http.Error(w, "Internal Error", http.StatusInternalServerError)
+			return
+		}
+		r.Body = io.NopCloser(bytes.NewBuffer(body))
+		
+		// Write body to transaction
+		if _, err := tx.RequestBodyWriter().Write(body); err != nil {
+			p.logger.Error("Failed to write body to WAF", zap.Error(err))
+		}
+	}
+
+	// Process URI and method
+	tx.ProcessURI(r.URL.String(), r.Method, r.Proto)
+	tx.ProcessRequestHeaders()
+
 	// Check if request was interrupted (blocked)
-	if it != nil {
+	if it := tx.Interruption(); it != nil {
 		p.logger.Warn("Request blocked by WAF",
 			zap.String("ip", clientIP),
 			zap.String("path", r.URL.Path),
-			zap.Int("status", it.Status))
-		http.Error(w, "Request blocked by security rules", it.Status)
+			zap.Int("status", it.Status),
+			zap.Int("rule_id", it.RuleID))
+		http.Error(w, fmt.Sprintf("Request blocked by security rule %d", it.RuleID), it.Status)
 		return
 	}
 
@@ -143,7 +165,7 @@ func (p *CorazaProxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 }
 
 func (p *CorazaProxy) modifyResponse(res *http.Response) error {
-	// Simple response modification - you can add response body inspection here
+	// Simple response modification
 	contentType := res.Header.Get("Content-Type")
 	if strings.Contains(contentType, "text/html") || strings.Contains(contentType, "application/json") {
 		body, err := io.ReadAll(res.Body)
