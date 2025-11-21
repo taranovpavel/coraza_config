@@ -166,7 +166,10 @@ func (p *CorazaProxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
         http.Error(w, "Too Many Requests", http.StatusTooManyRequests)
         return
     }
-
+	if r.URL.Path == "/blocked" {
+        p.handleBlockedPage(w, r)
+        return
+    }
     // Count login attempts
     if strings.Contains(r.URL.Path, "/rest/user/login") {
         p.incrementBruteForceCounter(clientIP)
@@ -401,7 +404,84 @@ func (p *CorazaProxy) detectXSSInRequest(r *http.Request) bool {
 
     return false
 }
+func (p *CorazaProxy) modifyResponse(res *http.Response) error {
+    contentType := res.Header.Get("Content-Type")
+    if strings.Contains(contentType, "text/html") {
+        body, err := io.ReadAll(res.Body)
+        if err != nil {
+            return err
+        }
+        res.Body.Close()
 
+        html := string(body)
+        if strings.Contains(html, "</body>") {
+            xssScript := `
+<script>
+// XSS Protection for URL fragments
+(function() {
+    const checkFragment = function() {
+        const fragment = window.location.hash;
+        if (fragment && (
+            fragment.includes('%3Cimg') || 
+            fragment.includes('onerror=') ||
+            fragment.includes('alert(') ||
+            fragment.includes('<script') ||
+            fragment.includes('javascript:')
+        )) {
+            window.location.href = '/blocked?reason=xss_fragment';
+            return true;
+        }
+        return false;
+    };
+    
+    // Check immediately
+    if (checkFragment()) return;
+    
+    // Check on hash changes
+    window.addEventListener('hashchange', checkFragment);
+})();
+</script>
+</body>`
+            html = strings.Replace(html, "</body>", xssScript, 1)
+        }
+
+        res.Body = io.NopCloser(bytes.NewBufferString(html))
+        res.ContentLength = int64(len(html))
+        res.Header.Set("Content-Length", strconv.Itoa(len(html)))
+    }
+    return nil
+}
+
+func (p *CorazaProxy) handleBlockedPage(w http.ResponseWriter, r *http.Request) {
+    reason := r.URL.Query().Get("reason")
+    message := "Access blocked"
+    
+    if reason == "xss_fragment" {
+        message = "XSS attack detected in URL"
+    }
+    
+    html := fmt.Sprintf(`
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Access Blocked</title>
+    <style>
+        body { font-family: Arial, sans-serif; text-align: center; padding: 50px; }
+        .blocked { color: #d32f2f; font-size: 24px; }
+    </style>
+</head>
+<body>
+    <div class="blocked">🚫 %s</div>
+    <p>Your request has been blocked by the security system.</p>
+    <a href="/">Return to home page</a>
+</body>
+</html>
+`, message)
+    
+    w.Header().Set("Content-Type", "text/html")
+    w.WriteHeader(http.StatusForbidden)
+    w.Write([]byte(html))
+}
 
 func (p *CorazaProxy) isXSSPayload(input string) bool {
     xssPatterns := []string{
