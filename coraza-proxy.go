@@ -8,6 +8,7 @@ import (
 	"net"
 	"net/http"
 	"net/http/httputil"
+	"net/url"
 	"os"
 	"regexp"
 	"strings"
@@ -159,18 +160,36 @@ SecRule REQUEST_URI "@rx #.*alert\\(" "phase:1,deny,status:403,id:6003,msg:'XSS 
 
 func (p *CorazaProxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	clientIP := p.getClientIP(r)
-
 	// Brute force protection
-	if p.isBruteForceBlocked(clientIP) {
-		p.logger.Warn("Brute force blocked", zap.String("ip", clientIP))
-		http.Error(w, "Too Many Requests", http.StatusTooManyRequests)
-		return
-	}
+    if p.isBruteForceBlocked(clientIP) {
+        p.logger.Warn("Brute force blocked", zap.String("ip", clientIP))
+        http.Error(w, "Too Many Requests", http.StatusTooManyRequests)
+        return
+    }
 
-	// Count login attempts
-	if strings.Contains(r.URL.Path, "/rest/user/login") {
-		p.incrementBruteForceCounter(clientIP)
-	}
+    // Count login attempts
+    if strings.Contains(r.URL.Path, "/rest/user/login") {
+        p.incrementBruteForceCounter(clientIP)
+    }
+
+    // Check for XSS in URL fragment (part after #)
+    if p.detectXSSInURL(r) {
+        p.logger.Warn("XSS detected in URL fragment", 
+            zap.String("ip", clientIP),
+            zap.String("url", r.URL.String()))
+        http.Error(w, "XSS attack detected", http.StatusForbidden)
+        return
+    }
+
+    // XSS check in query parameters
+    if p.detectXSSInRequest(r) {
+        p.logger.Warn("XSS detected in request parameters", 
+            zap.String("ip", clientIP),
+            zap.String("path", r.URL.Path))
+        http.Error(w, "XSS attack detected", http.StatusForbidden)
+        return
+    }
+	
 	 // XSS check before WAF processing
     if p.detectXSSInRequest(r) {
         p.logger.Warn("XSS detected in request", 
@@ -328,49 +347,9 @@ func (p *CorazaProxy) detectResponseXSS(body []byte) bool {
 	}
 	return false
 }
-func (p *CorazaProxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-    clientIP := p.getClientIP(r)
-
-    // Brute force protection
-    if p.isBruteForceBlocked(clientIP) {
-        p.logger.Warn("Brute force blocked", zap.String("ip", clientIP))
-        http.Error(w, "Too Many Requests", http.StatusTooManyRequests)
-        return
-    }
-
-    // Count login attempts
-    if strings.Contains(r.URL.Path, "/rest/user/login") {
-        p.incrementBruteForceCounter(clientIP)
-    }
-
-    // Check for XSS in URL fragment (part after #)
-    if p.detectXSSInURL(r) {
-        p.logger.Warn("XSS detected in URL fragment", 
-            zap.String("ip", clientIP),
-            zap.String("url", r.URL.String()))
-        http.Error(w, "XSS attack detected", http.StatusForbidden)
-        return
-    }
-
-    // XSS check in query parameters
-    if p.detectXSSInRequest(r) {
-        p.logger.Warn("XSS detected in request parameters", 
-            zap.String("ip", clientIP),
-            zap.String("path", r.URL.Path))
-        http.Error(w, "XSS attack detected", http.StatusForbidden)
-        return
-    }
-
-    // Create new transaction
-    tx := p.waf.NewTransaction()
-    defer tx.Close()
-
-    // ... остальной код WAF обработки
-}
 
 func (p *CorazaProxy) detectXSSInURL(r *http.Request) bool {
-    // Get the full URL including fragment
-    fullURL := r.URL.String()
+    // УБРАЛИ fullURL - она не используется
     
     // Check the fragment part (after #)
     if fragment := r.URL.Fragment; fragment != "" {
@@ -425,6 +404,7 @@ func (p *CorazaProxy) detectXSSInRequest(r *http.Request) bool {
 
     return false
 }
+
 
 func (p *CorazaProxy) isXSSPayload(input string) bool {
     xssPatterns := []string{
