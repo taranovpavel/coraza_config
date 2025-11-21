@@ -152,7 +152,7 @@ SecRule REQUEST_URI "@rx #.*search.*q=.*%3C" "phase:1,deny,status:403,id:6001,ms
 
 SecRule REQUEST_URI "@rx #.*q=.*onerror" "phase:1,deny,status:403,id:6002,msg:'XSS in URL fragment detected'"
 
-SecRule REQUEST_URI "@rx #.*alert\\(" "phase:1,deny,status:403,id:6003,msg:'XSS in URL fragment detected'"
+SecRule REQUEST_URI "@rx #.*alert\\\(" "phase:1,deny,status:403,id:6003,msg:'XSS in URL fragment detected'"
 `
 
 	return rules
