@@ -10,7 +10,6 @@ import (
 	"net/http/httptest"
 	"net/http/httputil"
 	"os"
-	"regexp"
 	"strconv"
 	"strings"
 	"time"
@@ -312,13 +311,6 @@ func (p *CorazaProxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	// Use Coraza HTTP wrapper for proper transaction handling
 	tx := p.waf.NewTransaction()
 	defer tx.Close()
-
-	// Process using Coraza HTTP helpers
-	if _, err := txhttp.Wrap(tx, r, p.reverseProxy).ServeHTTP(w, r); err != nil {
-		p.logger.Error("Error processing request", zap.Error(err))
-		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
-		return
-	}
 }
 
 func (p *CorazaProxy) showWAFStatus(w http.ResponseWriter, r *http.Request) {
