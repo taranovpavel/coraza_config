@@ -155,25 +155,35 @@ SecRule REQUEST_URI "@rx #.*q=.*onerror" "phase:1,deny,status:403,id:6002,msg:'X
 
 SecRule REQUEST_URI "@rx #.*alert\\\(" "phase:1,deny,status:403,id:6003,msg:'XSS in URL fragment detected'"
 
-# Запрет спецсимволов в логине
+# Запрет спецсимволов в логине (для query параметров)
 SecRule ARGS:username|ARGS:login|ARGS:user|ARGS:email "@rx [<>'\\\"%;()&+|]" \
     "phase:2,deny,status:400,id:8001,msg:'Special characters in login field',tag:'security',tag:'login',tag:'special_chars'"
 
-# Более строгое правило - только буквы, цифры, @.-_
-SecRule ARGS:username|ARGS:login|ARGS:user|ARGS:email "!@rx ^[a-zA-Z0-9@._-]+$" \
-    "phase:2,deny,status:400,id:8002,msg:'Invalid characters in login field',tag:'security',tag:'login',tag:'input_validation'"
+# Для JSON login в теле запроса - ОСНОВНОЕ ПРАВИЛО ДЛЯ JUICE SHOP
+SecRule REQUEST_BODY "@rx \\"(email|username|password)\"\\s*:\\s*\"[^\\"]*(['\\\"][\\s]*OR[\\s]*1=1|['\\\"][\\s]*OR[\\s]*['\\\"][\\s]*=[\\s]*['\\\"]|--|/\\*)[^\\"]*\\"" \
+    "phase:2,deny,status:400,id:8006,msg:'SQL injection in JSON login detected',tag:'attack',tag:'sqli',tag:'juiceshop'"
 
-# Защита от SQL инъекций в логине
-SecRule ARGS:username|ARGS:login|ARGS:user|ARGS:email "@rx (union|select|insert|update|delete|drop|exec|--|#|;)" \
-    "phase:2,deny,status:400,id:8003,msg:'SQL injection attempt in login',tag:'attack',tag:'sqli',tag:'login'"
+# Обнаружение SQL инъекций в JSON теле
+SecRule REQUEST_BODY "@rx \\"(email|username)\"\\s*:\\s*\"[^\\"]*(union|select|insert|update|delete|drop|exec)[^\\"]*\\"" \
+    "phase:2,deny,status:400,id:8007,msg:'SQL keywords in JSON login',tag:'attack',tag:'sqli',tag:'juiceshop'"
 
-# Максимальная длина логина
-SecRule ARGS:username|ARGS:login|ARGS:user|ARGS:email "@gt 50" \
-    "phase:2,deny,status:400,id:8004,msg:'Login too long',tag:'security',tag:'login',tag:'length'"
+# Более строгое правило для email формата в JSON
+SecRule REQUEST_BODY "@rx \\"email\\"\\s*:\\s*\"[^\\"]*[^a-zA-Z0-9@._-][^\\"]*\\"" \
+    "phase:2,deny,status:400,id:8008,msg:'Invalid email format',tag:'security',tag:'login',tag:'juiceshop'"
 
-# Проверка для JSON login полей
-SecRule REQUEST_BODY "@rx \\"(username|login|user|email)\"\\s*:\\s*\"[^\\"]*[<>'\\\"%;()&+|][^\\"]*\\"" \
-    "phase:2,deny,status:400,id:8005,msg:'Special characters in JSON login field',tag:'security',tag:'login',tag:'json'"
+# Максимальная длина для JSON полей
+SecRule REQUEST_BODY "@rx \\"(email|username)\"\\s*:\\s*\"[^\\"]{51,}\\"" \
+    "phase:2,deny,status:400,id:8009,msg:'Login field too long',tag:'security',tag:'login',tag:'juiceshop'"
+
+# Дополнительные SQL инъекции для всех параметров
+SecRule ARGS|ARGS_NAMES|REQUEST_BODY "@rx ['\\\"]?\\s*OR\\s*1=1" \
+    "phase:1,deny,status:403,id:2002,msg:'SQLi OR 1=1 detected'"
+
+SecRule ARGS|ARGS_NAMES|REQUEST_BODY "@rx --\\s*$" \
+    "phase:1,deny,status:403,id:2003,msg:'SQL comment detected'"
+
+SecRule ARGS|ARGS_NAMES|REQUEST_BODY "@rx /\\*" \
+    "phase:1,deny,status:403,id:2004,msg:'SQL block comment detected'"
 `
 
 	return rules
