@@ -15,7 +15,6 @@ import (
 	"time"
 
 	"github.com/corazawaf/coraza/v3"
-	txhttp "github.com/corazawaf/coraza/v3/http"
 	"go.uber.org/zap"
 )
 
