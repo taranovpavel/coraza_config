@@ -154,6 +154,31 @@ SecRule REQUEST_URI "@rx #.*search.*q=.*%3C" "phase:1,deny,status:403,id:6001,ms
 SecRule REQUEST_URI "@rx #.*q=.*onerror" "phase:1,deny,status:403,id:6002,msg:'XSS in URL fragment detected'"
 
 SecRule REQUEST_URI "@rx #.*alert\\\(" "phase:1,deny,status:403,id:6003,msg:'XSS in URL fragment detected'"
+
+# Запрет спецсимволов в логине
+SecRule ARGS:username|ARGS:login|ARGS:user|ARGS:email "@rx [<>'\"%;()&+|\\\`\\$]" \
+    "phase:2,deny,status:400,id:8001,msg:'Special characters in login field',\
+    tag:'security',tag:'login',tag:'special_chars'"
+
+# Более строгое правило - только буквы, цифры, @.-_
+SecRule ARGS:username|ARGS:login|ARGS:user|ARGS:email "!@rx ^[a-zA-Z0-9@._-]+$" \
+    "phase:2,deny,status:400,id:8002,msg:'Invalid characters in login field',\
+    tag:'security',tag:'login',tag:'input_validation'"
+
+# Защита от SQL инъекций в логине
+SecRule ARGS:username|ARGS:login|ARGS:user|ARGS:email "@rx (?i)(union|select|insert|update|delete|drop|exec|--|#|\\*|;)" \
+    "phase:2,deny,status:400,id:8003,msg:'SQL injection attempt in login',\
+    tag:'attack',tag:'sqli',tag:'login'"
+
+# Максимальная длина логина
+SecRule ARGS:username|ARGS:login|ARGS:user|ARGS:email "@gt 50" \
+    "phase:2,deny,status:400,id:8004,msg:'Login too long',\
+    tag:'security',tag:'login',tag:'length'"
+
+# Проверка для JSON login полей
+SecRule REQUEST_BODY "@rx \"(username|login|user|email)\"\\s*:\\s*\"[^\"]*[<>'\"%;()&+|\\\`\\$][^\"]*\"" \
+    "phase:2,deny,status:400,id:8005,msg:'Special characters in JSON login field',\
+    tag:'security',tag:'login',tag:'json'"
 `
 
 	return rules
