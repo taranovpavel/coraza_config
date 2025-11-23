@@ -80,7 +80,11 @@ SecResponseBodyAccess On
 SecResponseBodyMimeType text/plain text/html text/xml
 SecResponseBodyLimit 524288
 
-SecAuditEngine RelevantOnly
+SecAuditEngine On
+SecAuditLog /var/log/coraza/audit.log
+SecAuditLogFormat JSON
+SecDebugLog /var/log/coraza/debug.log
+SecDebugLogLevel 3
 SecAuditLogParts "ABIJDEFHZ"
 
 # Basic XSS protection
@@ -146,7 +150,7 @@ SecRule ARGS|ARGS_NAMES "@rx \\|.*rm" "phase:1,deny,status:403,id:14001,msg:'Com
 # Static files - no inspection
 SecRule REQUEST_FILENAME "@rx \\.(css|js|png|jpg|jpeg|gif|ico)$" "phase:1,pass,id:30001,ctl:ruleEngine=Off"
 
-# Или через регулярное выражение FTP
+# FTP
 SecRule REQUEST_FILENAME "@rx ^/ftp(/|$)" "phase:1,deny,status:403,id:10003,msg:'FTP path blocked'"
 # Block requests with suspicious fragments
 SecRule REQUEST_URI "@rx #.*search.*q=.*%3C" "phase:1,deny,status:403,id:6001,msg:'XSS in URL fragment detected'"
