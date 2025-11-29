@@ -574,6 +574,34 @@ func main() {
 		port = os.Args[2]
 	}
 
-	log.Printf("Starting Coraza proxy on port %s, forwarding to %s", port, backendURL)
-	log.Fatal(http.ListenAndServe(":"+port, proxy))
+	server := &http.Server{
+		Addr:    ":" + port,
+		Handler: proxy,
+	}
+
+	// Канал для сигналов завершения
+	done := make(chan os.Signal, 1)
+	signal.Notify(done, os.Interrupt, syscall.SIGINT, syscall.SIGTERM)
+
+	// Запуск сервера в горутине
+	go func() {
+		log.Printf("Starting Coraza proxy on port %s, forwarding to %s", port, backendURL)
+		if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+			log.Fatal("Server error:", err)
+		}
+	}()
+
+	// Ожидание сигнала завершения
+	<-done
+	log.Println("Shutting down server...")
+
+	// Graceful shutdown с таймаутом
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	if err := server.Shutdown(ctx); err != nil {
+		log.Fatal("Server shutdown error:", err)
+	}
+
+	log.Println("Server stopped")
 }
