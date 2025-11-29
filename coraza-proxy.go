@@ -14,6 +14,9 @@ import (
 	"strings"
 	"strconv"
 	"time"
+	"context"
+	"os/signal"
+	"syscall"
 
 	"github.com/corazawaf/coraza/v3"
 	"go.uber.org/zap"
