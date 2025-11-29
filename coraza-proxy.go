@@ -81,9 +81,9 @@ SecResponseBodyMimeType text/plain text/html text/xml
 SecResponseBodyLimit 524288
 
 SecAuditEngine On
-SecAuditLog /var/log/coraza/audit.log
+SecAuditLog ./coraza_audit.log
 SecAuditLogFormat JSON
-SecDebugLog /var/log/coraza/debug.log
+SecDebugLog ./coraza_debug.log
 SecDebugLogLevel 3
 SecAuditLogParts "ABIJDEFHZ"
 
