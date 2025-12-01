@@ -317,18 +317,32 @@ SecRule ARGS|ARGS_NAMES|REQUEST_BODY "@contains |perl" \
 SecRule ARGS|ARGS_NAMES|REQUEST_BODY "@contains |php" \
     "phase:2,deny,status:403,id:10410,msg:'OWASP A03: Command injection php',tag:'OWASP_A03'"
 
-SecRule ARGS|REQUEST_BODY "@rx ['\"]?\\s*OR\\s*1=1" \
-    "phase:2,deny,status:403,id:10320,msg:'OWASP A03: SQLi OR 1=1 pattern',tag:'OWASP_A03',tag:'sqli'"
+########
 
-SecRule ARGS|REQUEST_BODY "@rx --\\s*$" \
-    "phase:2,deny,status:403,id:10321,msg:'OWASP A03: SQL comment',tag:'OWASP_A03'"
+SecRule ARGS "@rx ['\"]?\\s*OR\\s*1=1" \
+    "phase:2,deny,status:403,id:10320,msg:'OWASP A03: SQLi OR 1=1 pattern in args',tag:'OWASP_A03',tag:'sqli'"
 
-SecRule ARGS|REQUEST_BODY "@rx /\\*" \
-    "phase:2,deny,status:403,id:10322,msg:'OWASP A03: SQL block comment',tag:'OWASP_A03'"
+SecRule REQUEST_BODY "@rx ['\"]?\\s*OR\\s*1=1" \
+    "phase:2,deny,status:403,id:10321,msg:'OWASP A03: SQLi OR 1=1 pattern in body',tag:'OWASP_A03',tag:'sqli'"
 
-SecRule ARGS|REQUEST_BODY "@rx ['\"]\\s*OR\\s*['\"]\\s*=\\s*['\"]" \
-    "phase:2,deny,status:403,id:10323,msg:'OWASP A03: SQLi tautology',tag:'OWASP_A03'"
-	
+SecRule ARGS "@rx --\\s*$" \
+    "phase:2,deny,status:403,id:10322,msg:'OWASP A03: SQL comment in args',tag:'OWASP_A03'"
+
+SecRule REQUEST_BODY "@rx --\\s*$" \
+    "phase:2,deny,status:403,id:10323,msg:'OWASP A03: SQL comment in body',tag:'OWASP_A03'"
+
+SecRule ARGS "@rx /\\*" \
+    "phase:2,deny,status:403,id:10324,msg:'OWASP A03: SQL block comment in args',tag:'OWASP_A03'"
+
+SecRule REQUEST_BODY "@rx /\\*" \
+    "phase:2,deny,status:403,id:10325,msg:'OWASP A03: SQL block comment in body',tag:'OWASP_A03'"
+
+SecRule ARGS "@rx ['\"]\\s*OR\\s*['\"]\\s*=\\s*['\"]" \
+    "phase:2,deny,status:403,id:10326,msg:'OWASP A03: SQLi tautology in args',tag:'OWASP_A03'"
+
+SecRule REQUEST_BODY "@rx ['\"]\\s*OR\\s*['\"]\\s*=\\s*['\"]" \
+    "phase:2,deny,status:403,id:10327,msg:'OWASP A03: SQLi tautology in body',tag:'OWASP_A03'"
+
 ####################################################
 # A04:2021 - INSECURE DESIGN
 ####################################################
