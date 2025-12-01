@@ -390,18 +390,22 @@ SecRule REQUEST_BODY "@contains CVE-" \
 
 
 ####################################################
-# A09:2021 - SECURITY LOGGING AND MONITORING FAILURES
+# A10:2021 - SERVER-SIDE REQUEST FORGERY (SSRF)
 ####################################################
-SecRule REQUEST_URI "@contains /logs" \
-    "phase:1,deny,status:403,id:11000,msg:'OWASP A09: Log access attempt',tag:'OWASP_A09'"
+SecRule ARGS "@contains http://" \
+    "phase:2,deny,status:403,id:11100,msg:'OWASP A10: SSRF attempt',tag:'OWASP_A10'"
 
-SecRule REQUEST_URI "@contains /admin" \
-    "phase:1,setvar:ip.admin_access=+1,expirevar:ip.admin_access=60,id:11001,msg:'OWASP A09: Admin access counted',tag:'OWASP_A09'"
+SecRule ARGS "@contains https://" \
+    "phase:2,deny,status:403,id:11101,msg:'OWASP A10: SSRF attempt',tag:'OWASP_A10'"
 
-SecRule IP:admin_access "@gt 100" \
-    "phase:1,deny,status:429,id:11002,msg:'OWASP A09: Excessive admin access',tag:'OWASP_A09'"
+SecRule ARGS "@contains file://" \
+    "phase:2,deny,status:403,id:11102,msg:'OWASP A10: SSRF file protocol',tag:'OWASP_A10'"
 
+SecRule REQUEST_HEADERS "@contains 127.0.0.1" \
+    "phase:1,deny,status:403,id:11103,msg:'OWASP A10: Localhost access',tag:'OWASP_A10'"
 
+SecRule REQUEST_HEADERS "@contains localhost" \
+    "phase:1,deny,status:403,id:11104,msg:'OWASP A10: Localhost access',tag:'OWASP_A10'"
 
 ###########################################################################
 # ДОПОЛНИТЕЛЬНЫЕ ПРАВИЛА
