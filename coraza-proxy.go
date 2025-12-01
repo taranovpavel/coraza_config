@@ -109,7 +109,7 @@ SecRule ARGS "@contains /etc/" \
 SecRule ARGS "@contains /proc/" \
     "phase:1,deny,status:403,id:10103,msg:'OWASP A01: Path traversal /proc/',tag:'OWASP_A01'"
 
-SecRule REQUEST_URI "@beginsWith /api/" \
+SecRule REQUEST_URI "@rx ^/api/(users|admin|settings|orders)" \
     "phase:1,chain,deny,status:403,id:10104,msg:'OWASP A01: Unauthorized API access',tag:'OWASP_A01'"
 SecRule &REQUEST_HEADERS:Authorization "@eq 0"
 
