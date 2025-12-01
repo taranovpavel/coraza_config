@@ -177,9 +177,9 @@ SecRule ARGS|ARGS_NAMES|REQUEST_BODY "@contains benchmark" \
 SecRule ARGS|ARGS_NAMES|REQUEST_BODY "@contains pg_sleep" \
     "phase:2,deny,status:403,id:10314,msg:'OWASP A03: PostgreSQL sleep injection',tag:'OWASP_A03'"
 
-SecRule ARGS|ARGS_NAMES|REQUEST_BODY "@rx exec.*\\(|sp_|xp_" \
+SecRule ARGS|ARGS_NAMES|REQUEST_BODY "@rx (exec.*\\(|sp_|xp_)" \
     "phase:2,deny,status:403,id:10315,msg:'OWASP A03: SQL stored procedure injection',tag:'OWASP_A03'"
-
+	
 # XSS - 25 правил
 SecRule ARGS|ARGS_NAMES|REQUEST_BODY "@rx <script" \
     "phase:2,deny,status:403,id:10350,msg:'OWASP A03: XSS script tag',tag:'OWASP_A03',tag:'xss'"
