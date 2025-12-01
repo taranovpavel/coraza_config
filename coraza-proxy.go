@@ -173,7 +173,7 @@ SecRule ARGS|ARGS_NAMES|REQUEST_BODY "@rx sleep\\(\\d+\\)" \
 
 SecRule ARGS|ARGS_NAMES|REQUEST_BODY "@rx benchmark\\(" \
     "phase:2,deny,status:403,id:10312,msg:'OWASP A03: SQL benchmark injection',tag:'OWASP_A03'"
-
+	
 SecRule ARGS|ARGS_NAMES|REQUEST_BODY "@rx waitfor.*delay" \
     "phase:2,deny,status:403,id:10313,msg:'OWASP A03: SQL Server time delay',tag:'OWASP_A03'"
 
