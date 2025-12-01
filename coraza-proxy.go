@@ -127,195 +127,221 @@ SecRule REQUEST_BODY "@contains password" \
 
 SecRule REQUEST_BODY "@contains api_key" \
     "phase:2,deny,status:400,id:10202,msg:'OWASP A02: API key exposed in body',tag:'OWASP_A02'"
-	
-SecRule ARGS|REQUEST_BODY "@contains secret=" \
-    "phase:2,deny,status:400,id:10203,msg:'OWASP A02: Secret exposed',tag:'OWASP_A02'"
 
-SecRule ARGS|REQUEST_BODY "@contains token=" \
-    "phase:2,deny,status:400,id:10204,msg:'OWASP A02: Token exposed',tag:'OWASP_A02'"
+SecRule ARGS "@contains secret=" \
+    "phase:2,deny,status:400,id:10203,msg:'OWASP A02: Secret exposed in args',tag:'OWASP_A02'"
+
+SecRule REQUEST_BODY "@contains secret=" \
+    "phase:2,deny,status:400,id:10204,msg:'OWASP A02: Secret exposed in body',tag:'OWASP_A02'"
+
+SecRule ARGS "@contains token=" \
+    "phase:2,deny,status:400,id:10205,msg:'OWASP A02: Token exposed in args',tag:'OWASP_A02'"
+
+SecRule REQUEST_BODY "@contains token=" \
+    "phase:2,deny,status:400,id:10206,msg:'OWASP A02: Token exposed in body',tag:'OWASP_A02'"
 
 ####################################################
-# A03:2021 - INJECTION
+# A03:2021 - INJECTION (ИСПРАВЛЕННЫЙ)
 ####################################################
-SecRule ARGS|ARGS_NAMES|REQUEST_BODY "@contains union select" \
+# SQL Injection - проверяем ARGS
+SecRule ARGS "@contains union select" \
     "phase:2,deny,status:403,id:10301,msg:'OWASP A03: SQLi UNION SELECT',tag:'OWASP_A03',tag:'sqli'"
 
-SecRule ARGS|ARGS_NAMES|REQUEST_BODY "@contains select from" \
+SecRule ARGS "@contains select from" \
     "phase:2,deny,status:403,id:10302,msg:'OWASP A03: SQLi SELECT FROM',tag:'OWASP_A03'"
 
-SecRule ARGS|ARGS_NAMES|REQUEST_BODY "@contains insert into" \
+SecRule ARGS "@contains insert into" \
     "phase:2,deny,status:403,id:10303,msg:'OWASP A03: SQLi INSERT INTO',tag:'OWASP_A03'"
 
-SecRule ARGS|ARGS_NAMES|REQUEST_BODY "@contains update set" \
+SecRule ARGS "@contains update set" \
     "phase:2,deny,status:403,id:10304,msg:'OWASP A03: SQLi UPDATE SET',tag:'OWASP_A03'"
 
-SecRule ARGS|ARGS_NAMES|REQUEST_BODY "@contains delete from" \
+SecRule ARGS "@contains delete from" \
     "phase:2,deny,status:403,id:10305,msg:'OWASP A03: SQLi DELETE FROM',tag:'OWASP_A03'"
 
-SecRule ARGS|ARGS_NAMES|REQUEST_BODY "@contains drop table" \
+SecRule ARGS "@contains drop table" \
     "phase:2,deny,status:403,id:10306,msg:'OWASP A03: SQLi DROP TABLE',tag:'OWASP_A03'"
 
-SecRule ARGS|ARGS_NAMES|REQUEST_BODY "@contains 1=1" \
+SecRule ARGS "@contains 1=1" \
     "phase:2,deny,status:403,id:10307,msg:'OWASP A03: SQLi OR 1=1',tag:'OWASP_A03'"
 
-SecRule ARGS|ARGS_NAMES|REQUEST_BODY "@contains --" \
+SecRule ARGS "@contains --" \
     "phase:2,deny,status:403,id:10308,msg:'OWASP A03: SQL comment',tag:'OWASP_A03'"
 
-SecRule ARGS|ARGS_NAMES|REQUEST_BODY "@contains /*" \
+SecRule ARGS "@contains /*" \
     "phase:2,deny,status:403,id:10309,msg:'OWASP A03: SQL block comment',tag:'OWASP_A03'"
 
-SecRule ARGS|ARGS_NAMES|REQUEST_BODY "@contains sleep" \
+SecRule ARGS "@contains sleep" \
     "phase:2,deny,status:403,id:10310,msg:'OWASP A03: SQL time-based injection',tag:'OWASP_A03'"
 
-SecRule ARGS|ARGS_NAMES|REQUEST_BODY "@contains benchmark" \
+SecRule ARGS "@contains benchmark" \
     "phase:2,deny,status:403,id:10311,msg:'OWASP A03: SQL benchmark injection',tag:'OWASP_A03'"
 
-SecRule ARGS|ARGS_NAMES|REQUEST_BODY "@contains waitfor" \
+SecRule ARGS "@contains waitfor" \
     "phase:2,deny,status:403,id:10312,msg:'OWASP A03: SQL Server delay',tag:'OWASP_A03'"
 
-SecRule ARGS|ARGS_NAMES|REQUEST_BODY "@contains pg_sleep" \
+SecRule ARGS "@contains pg_sleep" \
     "phase:2,deny,status:403,id:10313,msg:'OWASP A03: PostgreSQL sleep',tag:'OWASP_A03'"
 
-SecRule ARGS|ARGS_NAMES|REQUEST_BODY "@contains exec" \
+SecRule ARGS "@contains exec" \
     "phase:2,deny,status:403,id:10314,msg:'OWASP A03: SQL exec command',tag:'OWASP_A03'"
 
-SecRule ARGS|ARGS_NAMES|REQUEST_BODY "@contains sp_" \
+SecRule ARGS "@contains sp_" \
     "phase:2,deny,status:403,id:10315,msg:'OWASP A03: SQL sp_ procedure',tag:'OWASP_A03'"
 
-SecRule ARGS|ARGS_NAMES|REQUEST_BODY "@contains xp_" \
+SecRule ARGS "@contains xp_" \
     "phase:2,deny,status:403,id:10316,msg:'OWASP A03: SQL xp_ procedure',tag:'OWASP_A03'"
 
-SecRule ARGS|ARGS_NAMES|REQUEST_BODY "@contains <script" \
+# SQL Injection - проверяем REQUEST_BODY отдельно
+SecRule REQUEST_BODY "@contains union select" \
+    "phase:2,deny,status:403,id:10317,msg:'OWASP A03: SQLi UNION SELECT in body',tag:'OWASP_A03'"
+
+SecRule REQUEST_BODY "@contains select from" \
+    "phase:2,deny,status:403,id:10318,msg:'OWASP A03: SQLi SELECT FROM in body',tag:'OWASP_A03'"
+
+# XSS - проверяем ARGS
+SecRule ARGS "@contains <script" \
     "phase:2,deny,status:403,id:10350,msg:'OWASP A03: XSS script tag',tag:'OWASP_A03',tag:'xss'"
 
-SecRule ARGS|ARGS_NAMES|REQUEST_BODY "@contains javascript:" \
+SecRule ARGS "@contains javascript:" \
     "phase:2,deny,status:403,id:10351,msg:'OWASP A03: XSS javascript protocol',tag:'OWASP_A03'"
 
-SecRule ARGS|ARGS_NAMES|REQUEST_BODY "@contains onerror=" \
+SecRule ARGS "@contains onerror=" \
     "phase:2,deny,status:403,id:10352,msg:'OWASP A03: XSS onerror handler',tag:'OWASP_A03'"
 
-SecRule ARGS|ARGS_NAMES|REQUEST_BODY "@contains onload=" \
+SecRule ARGS "@contains onload=" \
     "phase:2,deny,status:403,id:10353,msg:'OWASP A03: XSS onload handler',tag:'OWASP_A03'"
 
-SecRule ARGS|ARGS_NAMES|REQUEST_BODY "@contains onclick=" \
+SecRule ARGS "@contains onclick=" \
     "phase:2,deny,status:403,id:10354,msg:'OWASP A03: XSS onclick handler',tag:'OWASP_A03'"
 
-SecRule ARGS|ARGS_NAMES|REQUEST_BODY "@contains onmouseover=" \
+SecRule ARGS "@contains onmouseover=" \
     "phase:2,deny,status:403,id:10355,msg:'OWASP A03: XSS onmouseover handler',tag:'OWASP_A03'"
 
-SecRule ARGS|ARGS_NAMES|REQUEST_BODY "@contains alert(" \
+SecRule ARGS "@contains alert(" \
     "phase:2,deny,status:403,id:10356,msg:'OWASP A03: XSS alert function',tag:'OWASP_A03'"
 
-SecRule ARGS|ARGS_NAMES|REQUEST_BODY "@contains confirm(" \
+SecRule ARGS "@contains confirm(" \
     "phase:2,deny,status:403,id:10357,msg:'OWASP A03: XSS confirm function',tag:'OWASP_A03'"
 
-SecRule ARGS|ARGS_NAMES|REQUEST_BODY "@contains prompt(" \
+SecRule ARGS "@contains prompt(" \
     "phase:2,deny,status:403,id:10358,msg:'OWASP A03: XSS prompt function',tag:'OWASP_A03'"
 
-SecRule ARGS|ARGS_NAMES|REQUEST_BODY "@contains eval(" \
+SecRule ARGS "@contains eval(" \
     "phase:2,deny,status:403,id:10359,msg:'OWASP A03: XSS eval function',tag:'OWASP_A03'"
 
-SecRule ARGS|ARGS_NAMES|REQUEST_BODY "@contains document.cookie" \
+SecRule ARGS "@contains document.cookie" \
     "phase:2,deny,status:403,id:10360,msg:'OWASP A03: XSS cookie theft',tag:'OWASP_A03'"
 
-SecRule ARGS|ARGS_NAMES|REQUEST_BODY "@contains document.write" \
+SecRule ARGS "@contains document.write" \
     "phase:2,deny,status:403,id:10361,msg:'OWASP A03: XSS document.write',tag:'OWASP_A03'"
 
-SecRule ARGS|ARGS_NAMES|REQUEST_BODY "@contains innerHTML" \
+SecRule ARGS "@contains innerHTML" \
     "phase:2,deny,status:403,id:10362,msg:'OWASP A03: XSS innerHTML',tag:'OWASP_A03'"
 
-SecRule ARGS|ARGS_NAMES|REQUEST_BODY "@contains outerHTML" \
+SecRule ARGS "@contains outerHTML" \
     "phase:2,deny,status:403,id:10363,msg:'OWASP A03: XSS outerHTML',tag:'OWASP_A03'"
 
-SecRule ARGS|ARGS_NAMES|REQUEST_BODY "@contains <iframe" \
+SecRule ARGS "@contains <iframe" \
     "phase:2,deny,status:403,id:10364,msg:'OWASP A03: XSS iframe',tag:'OWASP_A03'"
 
-SecRule ARGS|ARGS_NAMES|REQUEST_BODY "@contains <embed" \
+SecRule ARGS "@contains <embed" \
     "phase:2,deny,status:403,id:10365,msg:'OWASP A03: XSS embed',tag:'OWASP_A03'"
 
-SecRule ARGS|ARGS_NAMES|REQUEST_BODY "@contains <object" \
+SecRule ARGS "@contains <object" \
     "phase:2,deny,status:403,id:10366,msg:'OWASP A03: XSS object',tag:'OWASP_A03'"
 
-SecRule ARGS|ARGS_NAMES|REQUEST_BODY "@contains <svg" \
+SecRule ARGS "@contains <svg" \
     "phase:2,deny,status:403,id:10367,msg:'OWASP A03: XSS SVG',tag:'OWASP_A03'"
 
-SecRule ARGS|ARGS_NAMES|REQUEST_BODY "@contains <img src" \
+SecRule ARGS "@contains <img src" \
     "phase:2,deny,status:403,id:10368,msg:'OWASP A03: XSS image injection',tag:'OWASP_A03'"
 
-SecRule ARGS|ARGS_NAMES|REQUEST_BODY "@contains <a href javascript:" \
+SecRule ARGS "@contains <a href javascript:" \
     "phase:2,deny,status:403,id:10369,msg:'OWASP A03: XSS malicious link',tag:'OWASP_A03'"
 
-SecRule ARGS|ARGS_NAMES|REQUEST_BODY "@contains expression(" \
+SecRule ARGS "@contains expression(" \
     "phase:2,deny,status:403,id:10370,msg:'OWASP A03: XSS CSS expression',tag:'OWASP_A03'"
 
-SecRule ARGS|ARGS_NAMES|REQUEST_BODY "@contains <link javascript:" \
+SecRule ARGS "@contains <link javascript:" \
     "phase:2,deny,status:403,id:10371,msg:'OWASP A03: XSS link injection',tag:'OWASP_A03'"
 
-SecRule ARGS|ARGS_NAMES|REQUEST_BODY "@contains <meta refresh" \
+SecRule ARGS "@contains <meta refresh" \
     "phase:2,deny,status:403,id:10372,msg:'OWASP A03: XSS meta refresh',tag:'OWASP_A03'"
 
-SecRule ARGS|ARGS_NAMES|REQUEST_BODY "@contains <base href" \
+SecRule ARGS "@contains <base href" \
     "phase:2,deny,status:403,id:10373,msg:'OWASP A03: XSS base tag manipulation',tag:'OWASP_A03'"
 
-SecRule ARGS|ARGS_NAMES|REQUEST_BODY "@contains <form action javascript:" \
+SecRule ARGS "@contains <form action javascript:" \
     "phase:2,deny,status:403,id:10374,msg:'OWASP A03: XSS form action hijack',tag:'OWASP_A03'"
 
-SecRule ARGS|ARGS_NAMES|REQUEST_BODY "@contains %3Cscript" \
+SecRule ARGS "@contains %3Cscript" \
     "phase:2,deny,status:403,id:10375,msg:'OWASP A03: URL encoded XSS',tag:'OWASP_A03'"
 
-SecRule ARGS|ARGS_NAMES|REQUEST_BODY "@contains %3Cimg" \
+SecRule ARGS "@contains %3Cimg" \
     "phase:2,deny,status:403,id:10376,msg:'OWASP A03: URL encoded img XSS',tag:'OWASP_A03'"
 
-SecRule ARGS|ARGS_NAMES|REQUEST_BODY "@contains %3Ciframe" \
+SecRule ARGS "@contains %3Ciframe" \
     "phase:2,deny,status:403,id:10377,msg:'OWASP A03: URL encoded iframe XSS',tag:'OWASP_A03'"
 
-SecRule ARGS|ARGS_NAMES|REQUEST_BODY "@contains onerror%3D" \
+SecRule ARGS "@contains onerror%3D" \
     "phase:2,deny,status:403,id:10378,msg:'OWASP A03: URL encoded onerror',tag:'OWASP_A03'"
 
-SecRule ARGS|ARGS_NAMES|REQUEST_BODY "@contains alert%28" \
+SecRule ARGS "@contains alert%28" \
     "phase:2,deny,status:403,id:10379,msg:'OWASP A03: URL encoded alert',tag:'OWASP_A03'"
 
-SecRule ARGS|ARGS_NAMES|REQUEST_BODY "@contains %253Cscript" \
+SecRule ARGS "@contains %253Cscript" \
     "phase:2,deny,status:403,id:10380,msg:'OWASP A03: Double encoded XSS',tag:'OWASP_A03'"
 
-SecRule ARGS|ARGS_NAMES|REQUEST_BODY "@contains &lt;script" \
+SecRule ARGS "@contains &lt;script" \
     "phase:2,deny,status:403,id:10381,msg:'OWASP A03: HTML entity XSS',tag:'OWASP_A03'"
 
-SecRule ARGS|ARGS_NAMES|REQUEST_BODY "@contains &lt;img" \
+SecRule ARGS "@contains &lt;img" \
     "phase:2,deny,status:403,id:10382,msg:'OWASP A03: HTML entity img XSS',tag:'OWASP_A03'"
 
-SecRule ARGS|ARGS_NAMES|REQUEST_BODY "@contains |ls" \
+# Command Injection
+SecRule ARGS "@contains |ls" \
     "phase:2,deny,status:403,id:10400,msg:'OWASP A03: Command injection ls',tag:'OWASP_A03',tag:'cmdi'"
 
-SecRule ARGS|ARGS_NAMES|REQUEST_BODY "@contains |cat" \
+SecRule ARGS "@contains |cat" \
     "phase:2,deny,status:403,id:10401,msg:'OWASP A03: Command injection cat',tag:'OWASP_A03'"
 
-SecRule ARGS|ARGS_NAMES|REQUEST_BODY "@contains |rm" \
+SecRule ARGS "@contains |rm" \
     "phase:2,deny,status:403,id:10402,msg:'OWASP A03: Command injection rm',tag:'OWASP_A03'"
 
-SecRule ARGS|ARGS_NAMES|REQUEST_BODY "@contains |wget" \
+SecRule ARGS "@contains |wget" \
     "phase:2,deny,status:403,id:10403,msg:'OWASP A03: Command injection wget',tag:'OWASP_A03'"
 
-SecRule ARGS|ARGS_NAMES|REQUEST_BODY "@contains |curl" \
+SecRule ARGS "@contains |curl" \
     "phase:2,deny,status:403,id:10404,msg:'OWASP A03: Command injection curl',tag:'OWASP_A03'"
 
-SecRule ARGS|ARGS_NAMES|REQUEST_BODY "@contains |nc" \
+SecRule ARGS "@contains |nc" \
     "phase:2,deny,status:403,id:10405,msg:'OWASP A03: Command injection netcat',tag:'OWASP_A03'"
 
-SecRule ARGS|ARGS_NAMES|REQUEST_BODY "@contains |bash" \
+SecRule ARGS "@contains |bash" \
     "phase:2,deny,status:403,id:10406,msg:'OWASP A03: Command injection bash',tag:'OWASP_A03'"
 
-SecRule ARGS|ARGS_NAMES|REQUEST_BODY "@contains |sh" \
+SecRule ARGS "@contains |sh" \
     "phase:2,deny,status:403,id:10407,msg:'OWASP A03: Command injection sh',tag:'OWASP_A03'"
 
-SecRule ARGS|ARGS_NAMES|REQUEST_BODY "@contains |python" \
+SecRule ARGS "@contains |python" \
     "phase:2,deny,status:403,id:10408,msg:'OWASP A03: Command injection python',tag:'OWASP_A03'"
 
-SecRule ARGS|ARGS_NAMES|REQUEST_BODY "@contains |perl" \
+SecRule ARGS "@contains |perl" \
     "phase:2,deny,status:403,id:10409,msg:'OWASP A03: Command injection perl',tag:'OWASP_A03'"
 
-SecRule ARGS|ARGS_NAMES|REQUEST_BODY "@contains |php" \
+SecRule ARGS "@contains |php" \
     "phase:2,deny,status:403,id:10410,msg:'OWASP A03: Command injection php',tag:'OWASP_A03'"
+
+# XSS в REQUEST_BODY
+SecRule REQUEST_BODY "@contains <script" \
+    "phase:2,deny,status:403,id:10450,msg:'OWASP A03: XSS script tag in body',tag:'OWASP_A03'"
+
+SecRule REQUEST_BODY "@contains javascript:" \
+    "phase:2,deny,status:403,id:10451,msg:'OWASP A03: XSS javascript in body',tag:'OWASP_A03'"
+
+SecRule REQUEST_BODY "@contains alert(" \
+    "phase:2,deny,status:403,id:10452,msg:'OWASP A03: XSS alert in body',tag:'OWASP_A03'"
 
 ####################################################
 # A04:2021 - INSECURE DESIGN
@@ -326,14 +352,17 @@ SecRule ARGS "@contains password=" \
 SecRule ARGS "@contains role=" \
     "phase:2,deny,status:400,id:10501,msg:'OWASP A04: Mass assignment role',tag:'OWASP_A04'"
 
-SecRule ARGS:price|ARGS:amount "@contains -" \
-    "phase:2,deny,status:400,id:10502,msg:'OWASP A04: Negative price/amount',tag:'OWASP_A04'"
+SecRule ARGS:price "@contains -" \
+    "phase:2,deny,status:400,id:10502,msg:'OWASP A04: Negative price',tag:'OWASP_A04'"
+
+SecRule ARGS:amount "@contains -" \
+    "phase:2,deny,status:400,id:10503,msg:'OWASP A04: Negative amount',tag:'OWASP_A04'"
 
 SecRule REQUEST_URI "@contains /checkout/" \
-    "phase:1,deny,status:403,id:10503,msg:'OWASP A04: Checkout bypass attempt',tag:'OWASP_A04'"
+    "phase:1,deny,status:403,id:10504,msg:'OWASP A04: Checkout bypass attempt',tag:'OWASP_A04'"
 
 ####################################################
-# A05:2021 - SECURITY MISCONFIGURATION (ИСПРАВЛЕННЫЙ)
+# A05:2021 - SECURITY MISCONFIGURATION
 ####################################################
 SecRule REQUEST_HEADERS:User-Agent "@contains nmap" \
     "phase:1,deny,status:403,id:10600,msg:'OWASP A05: Security scanner detected',tag:'OWASP_A05'"
@@ -353,7 +382,6 @@ SecRule REQUEST_FILENAME "@contains .bak" \
 SecRule REQUEST_FILENAME "@contains .env" \
     "phase:1,deny,status:403,id:10605,msg:'OWASP A05: Config file access',tag:'OWASP_A05'"
 
-# УПРОЩЕННЫЕ ПРАВИЛА БЕЗ CHAIN:
 SecRule ARGS:username "@contains admin" \
     "phase:2,deny,status:403,id:10606,msg:'OWASP A05: Default username admin',tag:'OWASP_A05'"
 
@@ -457,9 +485,9 @@ SecRule REQUEST_HEADERS "@contains localhost" \
     "phase:1,deny,status:403,id:11104,msg:'OWASP A10: Localhost access',tag:'OWASP_A10'"
 
 ###########################################################################
-# ДОПОЛНИТЕЛЬНЫЕ ПРАВИЛА
+# ДОПОЛНИТЕЛЬНЫЕ ПРАВИЛА (ИСПРАВЛЕННЫЕ)
 ###########################################################################
-SecRule REQUEST_FILENAME|ARGS|ARGS_NAMES "@contains ../" \
+SecRule ARGS "@contains ../" \
     "phase:1,deny,status:403,id:12001,msg:'Path traversal detected'"
 
 SecRule REQUEST_URI "@beginsWith /ftp" \
@@ -489,37 +517,40 @@ SecRule REQUEST_FILENAME "@endsWith .ico" \
 SecRule REQUEST_URI "@contains #" \
     "phase:1,deny,status:403,id:14001,msg:'XSS in URL fragment',tag:'xss'"
 
-SecRule ARGS:username|ARGS:login|ARGS:user|ARGS:email "@contains <" \
+SecRule ARGS:username "@contains <" \
     "phase:2,deny,status:400,id:15001,msg:'Special characters in login'"
 
-SecRule ARGS:username|ARGS:login|ARGS:user|ARGS:email "@contains >" \
+SecRule ARGS:login "@contains <" \
     "phase:2,deny,status:400,id:15002,msg:'Special characters in login'"
 
-SecRule ARGS:username|ARGS:login|ARGS:user|ARGS:email "@contains '" \
+SecRule ARGS:user "@contains <" \
     "phase:2,deny,status:400,id:15003,msg:'Special characters in login'"
 
-SecRule REQUEST_BODY "@contains OR 1=1" \
-    "phase:2,deny,status:400,id:15004,msg:'SQL injection in JSON',tag:'sqli'"
+SecRule ARGS:email "@contains <" \
+    "phase:2,deny,status:400,id:15004,msg:'Special characters in email'"
 
-SecRule REQUEST_BODY "@contains union select" \
+SecRule REQUEST_BODY "@contains OR 1=1" \
     "phase:2,deny,status:400,id:15005,msg:'SQL injection in JSON',tag:'sqli'"
 
+SecRule REQUEST_BODY "@contains union select" \
+    "phase:2,deny,status:400,id:15006,msg:'SQL injection in JSON',tag:'sqli'"
+
 SecRule REQUEST_BODY "@contains email" \
-    "phase:2,pass,id:15006,msg:'Email field check'"
+    "phase:2,pass,id:15007,msg:'Email field check'"
 
 SecRule REQUEST_BODY "@contains username" \
-    "phase:2,pass,id:15007,msg:'Username field check'"
+    "phase:2,pass,id:15008,msg:'Username field check'"
 
-SecRule ARGS:email|ARGS:username "@contains @" \
-    "phase:2,pass,id:15008,msg:'Valid email format'"
+SecRule ARGS:email "@contains @" \
+    "phase:2,pass,id:15009,msg:'Valid email format'"
 
-SecRule REQUEST_BODY "@contains email" \
-    "phase:2,pass,id:15009,msg:'Email length check',tag:'length'"
+SecRule ARGS:username "@contains @" \
+    "phase:2,pass,id:15010,msg:'Valid email format'"
 
-SecRule ARGS|ARGS_NAMES|REQUEST_BODY "@contains %3Cimg%20src" \
+SecRule ARGS "@contains %3Cimg%20src" \
     "phase:1,deny,status:403,id:16001,msg:'Mixed encoded XSS'"
 
-SecRule ARGS|ARGS_NAMES|REQUEST_BODY "@contains src%3Dx%20onerror" \
+SecRule ARGS "@contains src%3Dx%20onerror" \
     "phase:1,deny,status:403,id:16002,msg:'Mixed encoded XSS'"
 
 SecRule REQUEST_FILENAME "@contains /ftp" \
