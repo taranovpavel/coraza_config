@@ -137,35 +137,32 @@ SecRule ARGS|REQUEST_BODY "@rx (api[_-]?key|secret|token|password)=([a-zA-Z0-9]{
 ####################################################
 # A03:2021 - INJECTION (ПОЛНЫЙ НАБОР)
 ####################################################
-# SQL INJECTION - 15 правил
-SecRule ARGS|ARGS_NAMES|REQUEST_BODY "@rx union.*select" \
+# SQL INJECTION - ПРОСТОЙ РАБОЧИЙ ВАРИАНТ
+SecRule ARGS|ARGS_NAMES|REQUEST_BODY "@contains union select" \
     "phase:2,deny,status:403,id:10301,msg:'OWASP A03: SQLi UNION SELECT',tag:'OWASP_A03',tag:'sqli'"
 
-SecRule ARGS|ARGS_NAMES|REQUEST_BODY "@rx select.*from" \
+SecRule ARGS|ARGS_NAMES|REQUEST_BODY "@contains select from" \
     "phase:2,deny,status:403,id:10302,msg:'OWASP A03: SQLi SELECT FROM',tag:'OWASP_A03'"
 
-SecRule ARGS|ARGS_NAMES|REQUEST_BODY "@rx insert.*into" \
+SecRule ARGS|ARGS_NAMES|REQUEST_BODY "@contains insert into" \
     "phase:2,deny,status:403,id:10303,msg:'OWASP A03: SQLi INSERT INTO',tag:'OWASP_A03'"
 
-SecRule ARGS|ARGS_NAMES|REQUEST_BODY "@rx update.*set" \
+SecRule ARGS|ARGS_NAMES|REQUEST_BODY "@contains update set" \
     "phase:2,deny,status:403,id:10304,msg:'OWASP A03: SQLi UPDATE SET',tag:'OWASP_A03'"
 
-SecRule ARGS|ARGS_NAMES|REQUEST_BODY "@rx delete.*from" \
+SecRule ARGS|ARGS_NAMES|REQUEST_BODY "@contains delete from" \
     "phase:2,deny,status:403,id:10305,msg:'OWASP A03: SQLi DELETE FROM',tag:'OWASP_A03'"
 
-SecRule ARGS|ARGS_NAMES|REQUEST_BODY "@rx drop.*table" \
+SecRule ARGS|ARGS_NAMES|REQUEST_BODY "@contains drop table" \
     "phase:2,deny,status:403,id:10306,msg:'OWASP A03: SQLi DROP TABLE',tag:'OWASP_A03'"
 
-SecRule ARGS|ARGS_NAMES|REQUEST_BODY "@rx or.*1=1" \
+SecRule ARGS|ARGS_NAMES|REQUEST_BODY "@contains 1=1" \
     "phase:2,deny,status:403,id:10307,msg:'OWASP A03: SQLi OR 1=1',tag:'OWASP_A03'"
 
-SecRule ARGS|ARGS_NAMES|REQUEST_BODY "@rx '.*or.*'" \
-    "phase:2,deny,status:403,id:10308,msg:'OWASP A03: SQLi OR tautology',tag:'OWASP_A03'"
-
-SecRule ARGS|ARGS_NAMES|REQUEST_BODY "@rx --$" \
+SecRule ARGS|ARGS_NAMES|REQUEST_BODY "@contains --" \
     "phase:2,deny,status:403,id:10309,msg:'OWASP A03: SQL comment',tag:'OWASP_A03'"
 
-SecRule ARGS|ARGS_NAMES|REQUEST_BODY "@rx /\\*.*\\*/" \
+SecRule ARGS|ARGS_NAMES|REQUEST_BODY "@contains /*" \
     "phase:2,deny,status:403,id:10310,msg:'OWASP A03: SQL block comment',tag:'OWASP_A03'"
 
 SecRule ARGS|ARGS_NAMES|REQUEST_BODY "@contains sleep" \
@@ -174,11 +171,20 @@ SecRule ARGS|ARGS_NAMES|REQUEST_BODY "@contains sleep" \
 SecRule ARGS|ARGS_NAMES|REQUEST_BODY "@contains benchmark" \
     "phase:2,deny,status:403,id:10312,msg:'OWASP A03: SQL benchmark injection',tag:'OWASP_A03'"
 
+SecRule ARGS|ARGS_NAMES|REQUEST_BODY "@contains waitfor delay" \
+    "phase:2,deny,status:403,id:10313,msg:'OWASP A03: SQL Server time delay',tag:'OWASP_A03'"
+
 SecRule ARGS|ARGS_NAMES|REQUEST_BODY "@contains pg_sleep" \
     "phase:2,deny,status:403,id:10314,msg:'OWASP A03: PostgreSQL sleep injection',tag:'OWASP_A03'"
 
-SecRule ARGS|ARGS_NAMES|REQUEST_BODY "@rx (exec.*\\(|sp_|xp_)" \
-    "phase:2,deny,status:403,id:10315,msg:'OWASP A03: SQL stored procedure injection',tag:'OWASP_A03'"
+SecRule ARGS|ARGS_NAMES|REQUEST_BODY "@contains exec" \
+    "phase:2,deny,status:403,id:10315,msg:'OWASP A03: SQL exec command',tag:'OWASP_A03'"
+
+SecRule ARGS|ARGS_NAMES|REQUEST_BODY "@contains sp_" \
+    "phase:2,deny,status:403,id:10316,msg:'OWASP A03: SQL stored procedure sp_',tag:'OWASP_A03'"
+
+SecRule ARGS|ARGS_NAMES|REQUEST_BODY "@contains xp_" \
+    "phase:2,deny,status:403,id:10317,msg:'OWASP A03: SQL extended procedure xp_',tag:'OWASP_A03'"
 	
 # XSS - 25 правил
 SecRule ARGS|ARGS_NAMES|REQUEST_BODY "@rx <script" \
