@@ -364,7 +364,7 @@ SecRule ARGS:password "@contains 123456" \
     "phase:2,deny,status:400,id:10608,msg:'OWASP A05: Weak password 123456',tag:'OWASP_A05'"
 
 SecRule ARGS:password "@contains password" \
-    "phase:2,deny,status:400,id:10609,msg:'OWASP A05: Weak password "password"',tag:'OWASP_A05'"
+    "phase:2,deny,status:400,id:10609,msg:'OWASP A05: Weak password (password)',tag:'OWASP_A05'"
 
 ####################################################
 # A06:2021 - VULNERABLE AND OUTDATED COMPONENTS
@@ -399,9 +399,9 @@ SecRule ARGS:password "@contains 123456" \
 SecRule ARGS:password "@contains password" \
     "phase:2,deny,status:400,id:10803,msg:'OWASP A07: Weak password',tag:'OWASP_A07'"
 
-SecRule ARGS:password "@lt 8" \
+SecRule ARGS:password "@rx ^.{0,7}$" \
     "phase:2,deny,status:400,id:10804,msg:'OWASP A07: Password too short',tag:'OWASP_A07'"
-
+	
 SecRule ARGS "@contains @gmail.com" \
     "phase:2,deny,status:400,id:10805,msg:'OWASP A07: Credential phishing',tag:'OWASP_A07'"
 
