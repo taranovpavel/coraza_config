@@ -75,7 +75,7 @@ func NewCorazaProxy(backendURL string) (*CorazaProxy, error) {
 }
 
 func loadCustomRules() string {
-	rules := `
+rules := `
 SecRuleEngine On
 SecRequestBodyAccess On
 SecRequestBodyLimit 134217728
@@ -91,53 +91,52 @@ SecDebugLogLevel 3
 SecAuditLogParts "ABIJDEFHZ"
 
 ###########################################################################
-# OWASP TOP 10 2021 - ПОЛНЫЙ НАБОР ПРАВИЛ
+# OWASP TOP 10 2021 - ИСПРАВЛЕННЫЙ РАБОЧИЙ ВАРИАНТ
 ###########################################################################
 
 ####################################################
 # A01:2021 - BROKEN ACCESS CONTROL
 ####################################################
-# 1. Ограничение методов
-SecRule REQUEST_METHOD "!^(GET|POST|HEAD|OPTIONS)$" \
+SecRule REQUEST_METHOD "!@within GET POST HEAD OPTIONS" \
     "phase:1,deny,status:405,id:10100,msg:'OWASP A01: Invalid HTTP method',tag:'OWASP_A01',tag:'access-control'"
 
-# 2. Защита от перебора ID (IDOR)
-SecRule ARGS "@rx ^(\.\./|/etc/|/proc/|/var/|c:\\windows)" \
+SecRule ARGS "@contains ../" \
     "phase:1,deny,status:403,id:10101,msg:'OWASP A01: Path traversal attempt',tag:'OWASP_A01'"
 
-# 3. Запрет прямого доступа к API без токена
-SecRule REQUEST_URI "@rx ^/api/(users|admin|settings)" \
-    "phase:1,chain,deny,status:403,id:10102,msg:'OWASP A01: Unauthorized API access',tag:'OWASP_A01'"
-SecRule &REQUEST_HEADERS:Authorization "@eq 0" \
-    "t:none"
+SecRule ARGS "@contains /etc/" \
+    "phase:1,deny,status:403,id:10102,msg:'OWASP A01: Path traversal /etc/',tag:'OWASP_A01'"
 
-# 4. CORS проверка
-SecRule REQUEST_HEADERS:Origin "!^https?://(localhost|127\.0\.0\.1|192\.168\.)" \
-    "phase:1,deny,status:403,id:10103,msg:'OWASP A01: Invalid CORS origin',tag:'OWASP_A01'"
+SecRule ARGS "@contains /proc/" \
+    "phase:1,deny,status:403,id:10103,msg:'OWASP A01: Path traversal /proc/',tag:'OWASP_A01'"
+
+SecRule REQUEST_URI "@beginsWith /api/" \
+    "phase:1,chain,deny,status:403,id:10104,msg:'OWASP A01: Unauthorized API access',tag:'OWASP_A01'"
+SecRule &REQUEST_HEADERS:Authorization "@eq 0"
+
+SecRule REQUEST_HEADERS:Origin "!@contains localhost" \
+    "phase:1,deny,status:403,id:10105,msg:'OWASP A01: Invalid CORS origin',tag:'OWASP_A01'"
 
 ####################################################
 # A02:2021 - CRYPTOGRAPHIC FAILURES
 ####################################################
-# 1. Проверка SSL/TLS
-SecRule REQUEST_PROTOCOL "!^HTTP/2" \
+SecRule REQUEST_PROTOCOL "!@streq HTTP/2" \
     "phase:1,pass,id:10200,msg:'OWASP A02: Non-HTTP/2 protocol',tag:'OWASP_A02'"
 
-# 2. Обнаружение незашифрованных паролей
-SecRule REQUEST_BODY "@rx \\"password\\"\\s*:\\s*\\"([^\\"]{1,50})\\"" \
+SecRule REQUEST_BODY "@contains password" \
     "phase:2,deny,status:400,id:10201,msg:'OWASP A02: Plain text password detected',tag:'OWASP_A02'"
 
-# 3. Проверка слабых алгоритмов
-SecRule REQUEST_HEADERS "@rx ^(MD5|SHA1|DES|RC4)" \
-    "phase:1,deny,status:400,id:10202,msg:'OWASP A02: Weak crypto algorithm',tag:'OWASP_A02'"
+SecRule ARGS|REQUEST_BODY "@contains api_key" \
+    "phase:2,deny,status:400,id:10202,msg:'OWASP A02: API key exposed',tag:'OWASP_A02'"
 
-# 4. Обнаружение секретов в запросах
-SecRule ARGS|REQUEST_BODY "@rx (api[_-]?key|secret|token|password)=([a-zA-Z0-9]{20,})" \
-    "phase:2,deny,status:400,id:10203,msg:'OWASP A02: API key exposed',tag:'OWASP_A02'"
+SecRule ARGS|REQUEST_BODY "@contains secret=" \
+    "phase:2,deny,status:400,id:10203,msg:'OWASP A02: Secret exposed',tag:'OWASP_A02'"
+
+SecRule ARGS|REQUEST_BODY "@contains token=" \
+    "phase:2,deny,status:400,id:10204,msg:'OWASP A02: Token exposed',tag:'OWASP_A02'"
 
 ####################################################
-# A03:2021 - INJECTION (ПОЛНЫЙ НАБОР)
+# A03:2021 - INJECTION
 ####################################################
-# SQL INJECTION - ПРОСТОЙ РАБОЧИЙ ВАРИАНТ
 SecRule ARGS|ARGS_NAMES|REQUEST_BODY "@contains union select" \
     "phase:2,deny,status:403,id:10301,msg:'OWASP A03: SQLi UNION SELECT',tag:'OWASP_A03',tag:'sqli'"
 
@@ -160,33 +159,32 @@ SecRule ARGS|ARGS_NAMES|REQUEST_BODY "@contains 1=1" \
     "phase:2,deny,status:403,id:10307,msg:'OWASP A03: SQLi OR 1=1',tag:'OWASP_A03'"
 
 SecRule ARGS|ARGS_NAMES|REQUEST_BODY "@contains --" \
-    "phase:2,deny,status:403,id:10309,msg:'OWASP A03: SQL comment',tag:'OWASP_A03'"
+    "phase:2,deny,status:403,id:10308,msg:'OWASP A03: SQL comment',tag:'OWASP_A03'"
 
 SecRule ARGS|ARGS_NAMES|REQUEST_BODY "@contains /*" \
-    "phase:2,deny,status:403,id:10310,msg:'OWASP A03: SQL block comment',tag:'OWASP_A03'"
+    "phase:2,deny,status:403,id:10309,msg:'OWASP A03: SQL block comment',tag:'OWASP_A03'"
 
 SecRule ARGS|ARGS_NAMES|REQUEST_BODY "@contains sleep" \
-    "phase:2,deny,status:403,id:10311,msg:'OWASP A03: SQL time-based injection',tag:'OWASP_A03'"
+    "phase:2,deny,status:403,id:10310,msg:'OWASP A03: SQL time-based injection',tag:'OWASP_A03'"
 
 SecRule ARGS|ARGS_NAMES|REQUEST_BODY "@contains benchmark" \
-    "phase:2,deny,status:403,id:10312,msg:'OWASP A03: SQL benchmark injection',tag:'OWASP_A03'"
+    "phase:2,deny,status:403,id:10311,msg:'OWASP A03: SQL benchmark injection',tag:'OWASP_A03'"
 
-SecRule ARGS|ARGS_NAMES|REQUEST_BODY "@contains waitfor delay" \
-    "phase:2,deny,status:403,id:10313,msg:'OWASP A03: SQL Server time delay',tag:'OWASP_A03'"
+SecRule ARGS|ARGS_NAMES|REQUEST_BODY "@contains waitfor" \
+    "phase:2,deny,status:403,id:10312,msg:'OWASP A03: SQL Server delay',tag:'OWASP_A03'"
 
 SecRule ARGS|ARGS_NAMES|REQUEST_BODY "@contains pg_sleep" \
-    "phase:2,deny,status:403,id:10314,msg:'OWASP A03: PostgreSQL sleep injection',tag:'OWASP_A03'"
+    "phase:2,deny,status:403,id:10313,msg:'OWASP A03: PostgreSQL sleep',tag:'OWASP_A03'"
 
 SecRule ARGS|ARGS_NAMES|REQUEST_BODY "@contains exec" \
-    "phase:2,deny,status:403,id:10315,msg:'OWASP A03: SQL exec command',tag:'OWASP_A03'"
+    "phase:2,deny,status:403,id:10314,msg:'OWASP A03: SQL exec command',tag:'OWASP_A03'"
 
 SecRule ARGS|ARGS_NAMES|REQUEST_BODY "@contains sp_" \
-    "phase:2,deny,status:403,id:10316,msg:'OWASP A03: SQL stored procedure sp_',tag:'OWASP_A03'"
+    "phase:2,deny,status:403,id:10315,msg:'OWASP A03: SQL sp_ procedure',tag:'OWASP_A03'"
 
 SecRule ARGS|ARGS_NAMES|REQUEST_BODY "@contains xp_" \
-    "phase:2,deny,status:403,id:10317,msg:'OWASP A03: SQL extended procedure xp_',tag:'OWASP_A03'"
+    "phase:2,deny,status:403,id:10316,msg:'OWASP A03: SQL xp_ procedure',tag:'OWASP_A03'"
 
-# XSS - 25 правил (ИСПРАВЛЕННЫЙ ВАРИАНТ)
 SecRule ARGS|ARGS_NAMES|REQUEST_BODY "@contains <script" \
     "phase:2,deny,status:403,id:10350,msg:'OWASP A03: XSS script tag',tag:'OWASP_A03',tag:'xss'"
 
@@ -262,7 +260,6 @@ SecRule ARGS|ARGS_NAMES|REQUEST_BODY "@contains <base href" \
 SecRule ARGS|ARGS_NAMES|REQUEST_BODY "@contains <form action javascript:" \
     "phase:2,deny,status:403,id:10374,msg:'OWASP A03: XSS form action hijack',tag:'OWASP_A03'"
 
-# URL encoded XSS
 SecRule ARGS|ARGS_NAMES|REQUEST_BODY "@contains %3Cscript" \
     "phase:2,deny,status:403,id:10375,msg:'OWASP A03: URL encoded XSS',tag:'OWASP_A03'"
 
@@ -278,18 +275,15 @@ SecRule ARGS|ARGS_NAMES|REQUEST_BODY "@contains onerror%3D" \
 SecRule ARGS|ARGS_NAMES|REQUEST_BODY "@contains alert%28" \
     "phase:2,deny,status:403,id:10379,msg:'OWASP A03: URL encoded alert',tag:'OWASP_A03'"
 
-# Double encoded
 SecRule ARGS|ARGS_NAMES|REQUEST_BODY "@contains %253Cscript" \
     "phase:2,deny,status:403,id:10380,msg:'OWASP A03: Double encoded XSS',tag:'OWASP_A03'"
 
-# HTML entities
 SecRule ARGS|ARGS_NAMES|REQUEST_BODY "@contains &lt;script" \
     "phase:2,deny,status:403,id:10381,msg:'OWASP A03: HTML entity XSS',tag:'OWASP_A03'"
 
 SecRule ARGS|ARGS_NAMES|REQUEST_BODY "@contains &lt;img" \
     "phase:2,deny,status:403,id:10382,msg:'OWASP A03: HTML entity img XSS',tag:'OWASP_A03'"
 
-# COMMAND INJECTION - 10 правил (тоже исправляем)
 SecRule ARGS|ARGS_NAMES|REQUEST_BODY "@contains |ls" \
     "phase:2,deny,status:403,id:10400,msg:'OWASP A03: Command injection ls',tag:'OWASP_A03',tag:'cmdi'"
 
@@ -326,113 +320,111 @@ SecRule ARGS|ARGS_NAMES|REQUEST_BODY "@contains |php" \
 ####################################################
 # A04:2021 - INSECURE DESIGN
 ####################################################
-# 1. Защита от массового присвоения
-SecRule ARGS "@rx ^(password|role|isAdmin|permissions)=" \
+SecRule ARGS "@contains password=" \
     "phase:2,deny,status:400,id:10500,msg:'OWASP A04: Mass assignment attempt',tag:'OWASP_A04'"
 
-# 2. Проверка бизнес-логики
-SecRule ARGS:price|ARGS:amount "@rx ^-\\d+" \
-    "phase:2,deny,status:400,id:10501,msg:'OWASP A04: Negative price/amount',tag:'OWASP_A04'"
+SecRule ARGS "@contains role=" \
+    "phase:2,deny,status:400,id:10501,msg:'OWASP A04: Mass assignment role',tag:'OWASP_A04'"
 
-# 3. Защита от обхода workflow
-SecRule REQUEST_URI "@rx /checkout/.*/skip" \
-    "phase:1,deny,status:403,id:10502,msg:'OWASP A04: Workflow bypass attempt',tag:'OWASP_A04'"
+SecRule ARGS:price|ARGS:amount "@contains -" \
+    "phase:2,deny,status:400,id:10502,msg:'OWASP A04: Negative price/amount',tag:'OWASP_A04'"
+
+SecRule REQUEST_URI "@contains /checkout/" \
+    "phase:1,deny,status:403,id:10503,msg:'OWASP A04: Checkout bypass attempt',tag:'OWASP_A04'"
 
 ####################################################
 # A05:2021 - SECURITY MISCONFIGURATION
 ####################################################
-# 1. Защита от сканеров и ботов
-SecRule REQUEST_HEADERS:User-Agent "@pm nmap sqlmap nikto burpsuite metasploit" \
+SecRule REQUEST_HEADERS:User-Agent "@contains nmap" \
     "phase:1,deny,status:403,id:10600,msg:'OWASP A05: Security scanner detected',tag:'OWASP_A05'"
 
-# 2. Защита от directory listing
-SecRule REQUEST_URI "@rx /$" \
-    "phase:1,chain,deny,status:403,id:10601,msg:'OWASP A05: Directory listing attempt',tag:'OWASP_A05'"
-SecRule ARGS "@rx ^index\\.(php|asp|jsp|html)$" \
-    "t:none"
+SecRule REQUEST_HEADERS:User-Agent "@contains sqlmap" \
+    "phase:1,deny,status:403,id:10601,msg:'OWASP A05: SQL scanner detected',tag:'OWASP_A05'"
 
-# 3. Защита от доступа к backup файлам
-SecRule REQUEST_FILENAME "@rx \\.(bak|old|backup|save|orig|copy)$" \
-    "phase:1,deny,status:403,id:10602,msg:'OWASP A05: Backup file access',tag:'OWASP_A05'"
+SecRule REQUEST_HEADERS:User-Agent "@contains nikto" \
+    "phase:1,deny,status:403,id:10602,msg:'OWASP A05: Web scanner detected',tag:'OWASP_A05'"
 
-# 4. Защита от доступа к конфигурационным файлам
-SecRule REQUEST_FILENAME "@rx \\.(env|config|ini|conf|yml|yaml|json)$" \
-    "phase:1,deny,status:403,id:10603,msg:'OWASP A05: Config file access',tag:'OWASP_A05'"
+SecRule REQUEST_URI "@endsWith /" \
+    "phase:1,chain,deny,status:403,id:10603,msg:'OWASP A05: Directory listing attempt',tag:'OWASP_A05'"
+SecRule ARGS "@contains index." \
 
-# 5. Защита от default credentials
-SecRule ARGS:username|ARGS:login "@pm admin root administrator test" \
-    "phase:2,chain,deny,status:403,id:10604,msg:'OWASP A05: Default username attempt',tag:'OWASP_A05'"
-SecRule ARGS:password "@pm admin password 123456 12345678 qwerty" \
-    "t:none"
+SecRule REQUEST_FILENAME "@contains .bak" \
+    "phase:1,deny,status:403,id:10604,msg:'OWASP A05: Backup file access',tag:'OWASP_A05'"
+
+SecRule REQUEST_FILENAME "@contains .env" \
+    "phase:1,deny,status:403,id:10605,msg:'OWASP A05: Config file access',tag:'OWASP_A05'"
+
+SecRule ARGS:username "@contains admin" \
+    "phase:2,chain,deny,status:403,id:10606,msg:'OWASP A05: Default username',tag:'OWASP_A05'"
+SecRule ARGS:password "@contains admin" \
+
+SecRule ARGS:password "@contains 123456" \
+    "phase:2,deny,status:400,id:10607,msg:'OWASP A05: Weak password',tag:'OWASP_A05'"
 
 ####################################################
 # A06:2021 - VULNERABLE AND OUTDATED COMPONENTS
 ####################################################
-# 1. Обнаружение эксплойтов для известных уязвимостей
-SecRule REQUEST_URI "@rx (shell|exploit|rce|upload)" \
-    "phase:1,deny,status:403,id:10700,msg:'OWASP A06: Exploit pattern detected',tag:'OWASP_A06'"
+SecRule REQUEST_URI "@contains shell" \
+    "phase:1,deny,status:403,id:10700,msg:'OWASP A06: Shell access attempt',tag:'OWASP_A06'"
 
-# 2. Защита от доступа к папкам компонентов
-SecRule REQUEST_URI "@rx /(node_modules|vendor|lib|include)/" \
-    "phase:1,deny,status:403,id:10701,msg:'OWASP A06: Component directory access',tag:'OWASP_A06'"
+SecRule REQUEST_URI "@contains exploit" \
+    "phase:1,deny,status:403,id:10701,msg:'OWASP A06: Exploit attempt',tag:'OWASP_A06'"
 
-# 3. Обнаружение известных CVE эксплойтов
-SecRule REQUEST_URI|REQUEST_BODY "@rx (CVE-\\d{4}-\\d+|log4j|spring4shell|heartbleed)" \
-    "phase:1,deny,status:403,id:10702,msg:'OWASP A06: Known CVE exploit attempt',tag:'OWASP_A06'"
+SecRule REQUEST_URI "@contains /node_modules/" \
+    "phase:1,deny,status:403,id:10702,msg:'OWASP A06: Component directory access',tag:'OWASP_A06'"
+
+SecRule REQUEST_URI "@contains /vendor/" \
+    "phase:1,deny,status:403,id:10703,msg:'OWASP A06: Vendor directory access',tag:'OWASP_A06'"
+
+SecRule REQUEST_URI|REQUEST_BODY "@contains CVE-" \
+    "phase:1,deny,status:403,id:10704,msg:'OWASP A06: CVE exploit attempt',tag:'OWASP_A06'"
 
 ####################################################
 # A07:2021 - IDENTIFICATION AND AUTHENTICATION FAILURES
 ####################################################
-# 1. Brute force защита
-SecRule REQUEST_URI "@rx /(rest/user/login|api/login|auth/login)" \
+SecRule REQUEST_URI "@contains /rest/user/login" \
     "phase:1,setvar:ip.auth_attempt=+1,expirevar:ip.auth_attempt=300,id:10800,msg:'OWASP A07: Login attempt counted',tag:'OWASP_A07'"
 
 SecRule IP:auth_attempt "@gt 10" \
-    "phase:1,deny,status:429,id:10801,msg:'OWASP A07: Brute force attack detected',tag:'OWASP_A07'"
+    "phase:1,deny,status:429,id:10801,msg:'OWASP A07: Brute force attack',tag:'OWASP_A07'"
 
-# 2. Проверка слабых паролей
-SecRule ARGS:password "@rx ^(123456|password|qwerty|111111|admin)$" \
+SecRule ARGS:password "@contains 123456" \
     "phase:2,deny,status:400,id:10802,msg:'OWASP A07: Weak password',tag:'OWASP_A07'"
 
+SecRule ARGS:password "@contains password" \
+    "phase:2,deny,status:400,id:10803,msg:'OWASP A07: Weak password',tag:'OWASP_A07'"
+
 SecRule ARGS:password "@lt 8" \
-    "phase:2,deny,status:400,id:10803,msg:'OWASP A07: Password too short',tag:'OWASP_A07'"
+    "phase:2,deny,status:400,id:10804,msg:'OWASP A07: Password too short',tag:'OWASP_A07'"
 
-# 3. Защита от фишинга учетных данных
-SecRule ARGS "@rx ^(username|login|email|password)=[^&]*@[^&]*\\.[^&]*$" \
-    "phase:2,deny,status:400,id:10804,msg:'OWASP A07: Credential phishing attempt',tag:'OWASP_A07'"
-
-# 4. Проверка сессионных cookies
-SecRule REQUEST_COOKIES:sessionid|REQUEST_COOKIES:token "!^[a-zA-Z0-9]{32,}$" \
-    "phase:1,chain,deny,status:403,id:10805,msg:'OWASP A07: Invalid session cookie',tag:'OWASP_A07'"
-SecRule REQUEST_URI "!@rx ^/(login|register|public)" \
-    "t:none"
+SecRule ARGS "@contains @gmail.com" \
+    "phase:2,deny,status:400,id:10805,msg:'OWASP A07: Credential phishing',tag:'OWASP_A07'"
 
 ####################################################
 # A08:2021 - SOFTWARE AND DATA INTEGRITY FAILURES
 ####################################################
-# 1. Защита от десериализации
-SecRule REQUEST_BODY "@rx (rO0|base64|serial|deserialize)" \
-    "phase:2,deny,status:400,id:10900,msg:'OWASP A08: Insecure deserialization attempt',tag:'OWASP_A08'"
+SecRule REQUEST_BODY "@contains rO0" \
+    "phase:2,deny,status:400,id:10900,msg:'OWASP A08: Deserialization attempt',tag:'OWASP_A08'"
 
-# 2. Проверка целостности загружаемых файлов
-SecRule FILES "@rx \\.(exe|bat|cmd|sh|php|jar|war)$" \
-    "phase:2,deny,status:403,id:10901,msg:'OWASP A08: Dangerous file type upload',tag:'OWASP_A08'"
+SecRule REQUEST_BODY "@contains base64" \
+    "phase:2,deny,status:400,id:10901,msg:'OWASP A08: Base64 encoded data',tag:'OWASP_A08'"
 
-# 3. Защита от манипуляции с ценами
-SecRule ARGS:price|ARGS:total "@rx \\D" \
-    "phase:2,deny,status:400,id:10902,msg:'OWASP A08: Price manipulation attempt',tag:'OWASP_A08'"
+SecRule FILES "@contains .exe" \
+    "phase:2,deny,status:403,id:10902,msg:'OWASP A08: EXE file upload',tag:'OWASP_A08'"
+
+SecRule FILES "@contains .php" \
+    "phase:2,deny,status:403,id:10903,msg:'OWASP A08: PHP file upload',tag:'OWASP_A08'"
+
+SecRule ARGS:price "@contains ." \
+    "phase:2,pass,id:10904,msg:'OWASP A08: Price format check',tag:'OWASP_A08'"
 
 ####################################################
 # A09:2021 - SECURITY LOGGING AND MONITORING FAILURES
 ####################################################
-# 1. Обнаружение попыток очистки логов
-SecRule REQUEST_URI "@rx (/logs|/audit|/console)" \
-    "phase:1,chain,deny,status:403,id:11000,msg:'OWASP A09: Log access attempt',tag:'OWASP_A09'"
-SecRule REQUEST_METHOD "!@streq GET" \
-    "t:none"
+SecRule REQUEST_URI "@contains /logs" \
+    "phase:1,deny,status:403,id:11000,msg:'OWASP A09: Log access attempt',tag:'OWASP_A09'"
 
-# 2. Обнаружение аномальной активности
-SecRule REQUEST_URI "@rx /(admin|config|server)" \
+SecRule REQUEST_URI "@contains /admin" \
     "phase:1,setvar:ip.admin_access=+1,expirevar:ip.admin_access=60,id:11001,msg:'OWASP A09: Admin access counted',tag:'OWASP_A09'"
 
 SecRule IP:admin_access "@gt 100" \
@@ -441,73 +433,88 @@ SecRule IP:admin_access "@gt 100" \
 ####################################################
 # A10:2021 - SERVER-SIDE REQUEST FORGERY (SSRF)
 ####################################################
-# 1. Обнаружение SSRF атак
-SecRule ARGS "@rx ^(http|https|ftp|ldap|file|gopher)://" \
-    "phase:2,deny,status:403,id:11100,msg:'OWASP A10: SSRF attempt detected',tag:'OWASP_A10'"
+SecRule ARGS "@contains http://" \
+    "phase:2,deny,status:403,id:11100,msg:'OWASP A10: SSRF attempt',tag:'OWASP_A10'"
 
-# 2. Защита от внутренних запросов
-SecRule REQUEST_HEADERS "@rx ^(127\\.|10\\.|192\\.168\\.|172\\.(1[6-9]|2[0-9]|3[0-1])\\.|localhost)" \
-    "phase:1,deny,status:403,id:11101,msg:'OWASP A10: Internal network access attempt',tag:'OWASP_A10'"
+SecRule ARGS "@contains https://" \
+    "phase:2,deny,status:403,id:11101,msg:'OWASP A10: SSRF attempt',tag:'OWASP_A10'"
 
-# 3. Защита от DNS rebinding
-SecRule ARGS "@rx @.*\\.(local|localhost|internal|lan)" \
-    "phase:2,deny,status:403,id:11102,msg:'OWASP A10: DNS rebinding attempt',tag:'OWASP_A10'"
+SecRule ARGS "@contains file://" \
+    "phase:2,deny,status:403,id:11102,msg:'OWASP A10: SSRF file protocol',tag:'OWASP_A10'"
+
+SecRule REQUEST_HEADERS "@contains 127.0.0.1" \
+    "phase:1,deny,status:403,id:11103,msg:'OWASP A10: Localhost access',tag:'OWASP_A10'"
+
+SecRule REQUEST_HEADERS "@contains localhost" \
+    "phase:1,deny,status:403,id:11104,msg:'OWASP A10: Localhost access',tag:'OWASP_A10'"
 
 ###########################################################################
-# ДОПОЛНИТЕЛЬНЫЕ ПРАВИЛА (из твоего кода, но с обновленными ID)
+# ДОПОЛНИТЕЛЬНЫЕ ПРАВИЛА
 ###########################################################################
-
-# Path traversal
-SecRule REQUEST_FILENAME|ARGS|ARGS_NAMES "@rx \\.\\./" \
+SecRule REQUEST_FILENAME|ARGS|ARGS_NAMES "@contains ../" \
     "phase:1,deny,status:403,id:12001,msg:'Path traversal detected'"
 
-# FTP blocking
 SecRule REQUEST_URI "@beginsWith /ftp" \
     "phase:1,deny,status:403,id:12002,msg:'FTP access blocked'"
 
-# Static files - no inspection
-SecRule REQUEST_FILENAME "@rx \\.(css|js|png|jpg|jpeg|gif|ico|woff|woff2|ttf|svg)$" \
+SecRule REQUEST_FILENAME "@endsWith .css" \
     "phase:1,pass,id:13001,ctl:ruleEngine=Off"
 
-# Block requests with suspicious fragments
-SecRule REQUEST_URI "@rx #.*search.*q=.*%3C" \
-    "phase:1,deny,status:403,id:14001,msg:'XSS in URL fragment detected'"
+SecRule REQUEST_FILENAME "@endsWith .js" \
+    "phase:1,pass,id:13002,ctl:ruleEngine=Off"
 
-SecRule REQUEST_URI "@rx #.*q=.*onerror" \
-    "phase:1,deny,status:403,id:14002,msg:'XSS in URL fragment detected'"
+SecRule REQUEST_FILENAME "@endsWith .png" \
+    "phase:1,pass,id:13003,ctl:ruleEngine=Off"
 
-SecRule REQUEST_URI "@rx #.*alert\\\(" \
-    "phase:1,deny,status:403,id:14003,msg:'XSS in URL fragment detected'"
+SecRule REQUEST_FILENAME "@endsWith .jpg" \
+    "phase:1,pass,id:13004,ctl:ruleEngine=Off"
 
-# Запрет спецсимволов в логине
-SecRule ARGS:username|ARGS:login|ARGS:user|ARGS:email "@rx [<>'\\\"%;()&+|]" \
-    "phase:2,deny,status:400,id:15001,msg:'Special characters in login field'"
+SecRule REQUEST_FILENAME "@endsWith .jpeg" \
+    "phase:1,pass,id:13005,ctl:ruleEngine=Off"
 
-# Для JSON login в теле запроса - Juice Shop
-SecRule REQUEST_BODY "@rx \\"(email|username|password)\"\\s*:\\s*\"[^\\"]*(['\\\"][\\s]*OR[\\s]*1=1|['\\\"][\\s]*OR[\\s]*['\\\"][\\s]*=[\\s]*['\\\"]|--|/\\*)[^\\"]*\\"" \
-    "phase:2,deny,status:400,id:15002,msg:'SQL injection in JSON login detected'"
+SecRule REQUEST_FILENAME "@endsWith .gif" \
+    "phase:1,pass,id:13006,ctl:ruleEngine=Off"
 
-# Обнаружение SQL инъекций в JSON теле
-SecRule REQUEST_BODY "@rx \\"(email|username)\"\\s*:\\s*\"[^\\"]*(union|select|insert|update|delete|drop|exec)[^\\"]*\\"" \
-    "phase:2,deny,status:400,id:15003,msg:'SQL keywords in JSON login'"
+SecRule REQUEST_FILENAME "@endsWith .ico" \
+    "phase:1,pass,id:13007,ctl:ruleEngine=Off"
 
-# Более строгое правило для email формата в JSON
-SecRule REQUEST_BODY "@rx \\"email\\"\\s*:\\s*\"[^\\"]*[^a-zA-Z0-9@._-][^\\"]*\\"" \
-    "phase:2,deny,status:400,id:15004,msg:'Invalid email format'"
+SecRule REQUEST_URI "@contains #" \
+    "phase:1,deny,status:403,id:14001,msg:'XSS in URL fragment',tag:'xss'"
 
-# Максимальная длина для JSON полей
-SecRule REQUEST_BODY "@rx \\"(email|username)\"\\s*:\\s*\"[^\\"]{51,}\\"" \
-    "phase:2,deny,status:400,id:15005,msg:'Login field too long'"
+SecRule ARGS:username|ARGS:login|ARGS:user|ARGS:email "@contains <" \
+    "phase:2,deny,status:400,id:15001,msg:'Special characters in login'"
 
-# Mixed encoding XSS
-SecRule ARGS|ARGS_NAMES|REQUEST_BODY "@rx %3Cimg%20src" \
-    "phase:1,deny,status:403,id:16001,msg:'Mixed encoded XSS detected'"
+SecRule ARGS:username|ARGS:login|ARGS:user|ARGS:email "@contains >" \
+    "phase:2,deny,status:400,id:15002,msg:'Special characters in login'"
 
-SecRule ARGS|ARGS_NAMES|REQUEST_BODY "@rx src%3Dx%20onerror" \
-    "phase:1,deny,status:403,id:16002,msg:'Mixed encoded XSS detected'"
+SecRule ARGS:username|ARGS:login|ARGS:user|ARGS:email "@contains '" \
+    "phase:2,deny,status:400,id:15003,msg:'Special characters in login'"
 
-# FTP path regex
-SecRule REQUEST_FILENAME "@rx ^/ftp(/|$)" \
+SecRule REQUEST_BODY "@contains OR 1=1" \
+    "phase:2,deny,status:400,id:15004,msg:'SQL injection in JSON',tag:'sqli'"
+
+SecRule REQUEST_BODY "@contains union select" \
+    "phase:2,deny,status:400,id:15005,msg:'SQL injection in JSON',tag:'sqli'"
+
+SecRule REQUEST_BODY "@contains email" \
+    "phase:2,pass,id:15006,msg:'Email field check'"
+
+SecRule REQUEST_BODY "@contains username" \
+    "phase:2,pass,id:15007,msg:'Username field check'"
+
+SecRule ARGS:email|ARGS:username "!@contains @" \
+    "phase:2,deny,status:400,id:15008,msg:'Invalid email format'"
+
+SecRule REQUEST_BODY "@rx \\"email\\"\\s*:\\s*\\"[^\\"]{51,}\\"" \
+    "phase:2,deny,status:400,id:15009,msg:'Email too long'"
+
+SecRule ARGS|ARGS_NAMES|REQUEST_BODY "@contains %3Cimg%20src" \
+    "phase:1,deny,status:403,id:16001,msg:'Mixed encoded XSS'"
+
+SecRule ARGS|ARGS_NAMES|REQUEST_BODY "@contains src%3Dx%20onerror" \
+    "phase:1,deny,status:403,id:16002,msg:'Mixed encoded XSS'"
+
+SecRule REQUEST_FILENAME "@contains /ftp" \
     "phase:1,deny,status:403,id:17001,msg:'FTP path blocked'"
 `
 
