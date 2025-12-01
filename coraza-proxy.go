@@ -387,6 +387,20 @@ SecRule REQUEST_URI "@contains CVE-" \
 SecRule REQUEST_BODY "@contains CVE-" \
     "phase:2,deny,status:403,id:10705,msg:'OWASP A06: CVE exploit attempt in body',tag:'OWASP_A06'"
 
+####################################################
+# A07:2021 - IDENTIFICATION AND AUTHENTICATION FAILURES
+####################################################
+SecRule REQUEST_URI "@contains /rest/user/login" \
+    "phase:1,pass,id:10800,msg:'OWASP A07: Login attempt',tag:'OWASP_A07'"
+
+SecRule ARGS:password "@contains 123456" \
+    "phase:2,deny,status:400,id:10802,msg:'OWASP A07: Weak password',tag:'OWASP_A07'"
+
+SecRule ARGS:password "@contains password" \
+    "phase:2,deny,status:400,id:10803,msg:'OWASP A07: Weak password',tag:'OWASP_A07'"
+
+SecRule ARGS "@contains @gmail.com" \
+    "phase:2,deny,status:400,id:10805,msg:'OWASP A07: Credential phishing',tag:'OWASP_A07'"
 
 
 ####################################################
@@ -407,7 +421,14 @@ SecRule ARGS "@contains .php" \
 SecRule ARGS:price "@contains ." \
     "phase:2,pass,id:10904,msg:'OWASP A08: Price format check',tag:'OWASP_A08'"
 
+####################################################
+# A09:2021 - SECURITY LOGGING AND MONITORING FAILURES
+####################################################
+SecRule REQUEST_URI "@contains /logs" \
+    "phase:1,deny,status:403,id:11000,msg:'OWASP A09: Log access attempt',tag:'OWASP_A09'"
 
+SecRule REQUEST_URI "@contains /admin" \
+    "phase:1,deny,status:403,id:11001,msg:'OWASP A09: Admin access blocked',tag:'OWASP_A09'"
 
 ####################################################
 # A10:2021 - SERVER-SIDE REQUEST FORGERY (SSRF)
