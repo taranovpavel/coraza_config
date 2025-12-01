@@ -333,7 +333,7 @@ SecRule REQUEST_URI "@contains /checkout/" \
     "phase:1,deny,status:403,id:10503,msg:'OWASP A04: Checkout bypass attempt',tag:'OWASP_A04'"
 
 ####################################################
-# A05:2021 - SECURITY MISCONFIGURATION
+# A05:2021 - SECURITY MISCONFIGURATION (ИСПРАВЛЕННЫЙ)
 ####################################################
 SecRule REQUEST_HEADERS:User-Agent "@contains nmap" \
     "phase:1,deny,status:403,id:10600,msg:'OWASP A05: Security scanner detected',tag:'OWASP_A05'"
@@ -353,12 +353,18 @@ SecRule REQUEST_FILENAME "@contains .bak" \
 SecRule REQUEST_FILENAME "@contains .env" \
     "phase:1,deny,status:403,id:10605,msg:'OWASP A05: Config file access',tag:'OWASP_A05'"
 
+# УПРОЩЕННЫЕ ПРАВИЛА БЕЗ CHAIN:
 SecRule ARGS:username "@contains admin" \
-    "phase:2,chain,deny,status:403,id:10606,msg:'OWASP A05: Default username',tag:'OWASP_A05'"
+    "phase:2,deny,status:403,id:10606,msg:'OWASP A05: Default username admin',tag:'OWASP_A05'"
+
 SecRule ARGS:password "@contains admin" \
+    "phase:2,deny,status:400,id:10607,msg:'OWASP A05: Weak password admin',tag:'OWASP_A05'"
 
 SecRule ARGS:password "@contains 123456" \
-    "phase:2,deny,status:400,id:10607,msg:'OWASP A05: Weak password',tag:'OWASP_A05'"
+    "phase:2,deny,status:400,id:10608,msg:'OWASP A05: Weak password 123456',tag:'OWASP_A05'"
+
+SecRule ARGS:password "@contains password" \
+    "phase:2,deny,status:400,id:10609,msg:'OWASP A05: Weak password "password"',tag:'OWASP_A05'"
 
 ####################################################
 # A06:2021 - VULNERABLE AND OUTDATED COMPONENTS
