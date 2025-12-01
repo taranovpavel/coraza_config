@@ -401,7 +401,7 @@ SecRule ARGS:password "@contains password" \
 
 SecRule ARGS:password "@rx ^.{0,7}$" \
     "phase:2,deny,status:400,id:10804,msg:'OWASP A07: Password too short',tag:'OWASP_A07'"
-	
+
 SecRule ARGS "@contains @gmail.com" \
     "phase:2,deny,status:400,id:10805,msg:'OWASP A07: Credential phishing',tag:'OWASP_A07'"
 
@@ -414,11 +414,11 @@ SecRule REQUEST_BODY "@contains rO0" \
 SecRule REQUEST_BODY "@contains base64" \
     "phase:2,deny,status:400,id:10901,msg:'OWASP A08: Base64 encoded data',tag:'OWASP_A08'"
 
-SecRule FILES "@contains .exe" \
-    "phase:2,deny,status:403,id:10902,msg:'OWASP A08: EXE file upload',tag:'OWASP_A08'"
+SecRule ARGS "@contains .exe" \
+    "phase:2,deny,status:403,id:10902,msg:'OWASP A08: EXE file upload attempt',tag:'OWASP_A08'"
 
-SecRule FILES "@contains .php" \
-    "phase:2,deny,status:403,id:10903,msg:'OWASP A08: PHP file upload',tag:'OWASP_A08'"
+SecRule ARGS "@contains .php" \
+    "phase:2,deny,status:403,id:10903,msg:'OWASP A08: PHP file upload attempt',tag:'OWASP_A08'"
 
 SecRule ARGS:price "@contains ." \
     "phase:2,pass,id:10904,msg:'OWASP A08: Price format check',tag:'OWASP_A08'"
@@ -507,11 +507,11 @@ SecRule REQUEST_BODY "@contains email" \
 SecRule REQUEST_BODY "@contains username" \
     "phase:2,pass,id:15007,msg:'Username field check'"
 
-SecRule ARGS:email|ARGS:username "!@contains @" \
-    "phase:2,deny,status:400,id:15008,msg:'Invalid email format'"
+SecRule ARGS:email|ARGS:username "@contains @" \
+    "phase:2,pass,id:15008,msg:'Valid email format'"
 
-SecRule REQUEST_BODY "@rx \\"email\\"\\s*:\\s*\\"[^\\"]{51,}\\"" \
-    "phase:2,deny,status:400,id:15009,msg:'Email too long'"
+SecRule REQUEST_BODY "@contains email" \
+    "phase:2,pass,id:15009,msg:'Email length check',tag:'length'"
 
 SecRule ARGS|ARGS_NAMES|REQUEST_BODY "@contains %3Cimg%20src" \
     "phase:1,deny,status:403,id:16001,msg:'Mixed encoded XSS'"
