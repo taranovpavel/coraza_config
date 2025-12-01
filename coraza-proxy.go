@@ -343,6 +343,9 @@ SecRule ARGS "@rx ['\"]\\s*OR\\s*['\"]\\s*=\\s*['\"]" \
 SecRule REQUEST_BODY "@rx ['\"]\\s*OR\\s*['\"]\\s*=\\s*['\"]" \
     "phase:2,deny,status:403,id:10327,msg:'OWASP A03: SQLi tautology in body',tag:'OWASP_A03'"
 
+SecRule ARGS "@rx ['\"]?\\s*(?i:or)\\s*1=1" \
+    "phase:2,deny,status:403,id:10320,msg:'OWASP A03: SQLi OR/1=1 pattern',tag:'OWASP_A03',tag:'sqli'"
+	
 ####################################################
 # A04:2021 - INSECURE DESIGN
 ####################################################
