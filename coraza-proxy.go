@@ -125,9 +125,9 @@ SecRule REQUEST_PROTOCOL "!@streq HTTP/2" \
 SecRule REQUEST_BODY "@contains password" \
     "phase:2,deny,status:400,id:10201,msg:'OWASP A02: Plain text password detected',tag:'OWASP_A02'"
 
-SecRule ARGS|REQUEST_BODY "@contains api_key" \
-    "phase:2,deny,status:400,id:10202,msg:'OWASP A02: API key exposed',tag:'OWASP_A02'"
-
+SecRule REQUEST_BODY "@contains api_key" \
+    "phase:2,deny,status:400,id:10202,msg:'OWASP A02: API key exposed in body',tag:'OWASP_A02'"
+	
 SecRule ARGS|REQUEST_BODY "@contains secret=" \
     "phase:2,deny,status:400,id:10203,msg:'OWASP A02: Secret exposed',tag:'OWASP_A02'"
 
@@ -381,8 +381,11 @@ SecRule REQUEST_URI "@contains /node_modules/" \
 SecRule REQUEST_URI "@contains /vendor/" \
     "phase:1,deny,status:403,id:10703,msg:'OWASP A06: Vendor directory access',tag:'OWASP_A06'"
 
-SecRule REQUEST_URI|REQUEST_BODY "@contains CVE-" \
-    "phase:1,deny,status:403,id:10704,msg:'OWASP A06: CVE exploit attempt',tag:'OWASP_A06'"
+SecRule REQUEST_URI "@contains CVE-" \
+    "phase:1,deny,status:403,id:10704,msg:'OWASP A06: CVE exploit attempt in URI',tag:'OWASP_A06'"
+
+SecRule REQUEST_BODY "@contains CVE-" \
+    "phase:2,deny,status:403,id:10705,msg:'OWASP A06: CVE exploit attempt in body',tag:'OWASP_A06'"
 
 ####################################################
 # A07:2021 - IDENTIFICATION AND AUTHENTICATION FAILURES
