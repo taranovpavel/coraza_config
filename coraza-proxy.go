@@ -387,46 +387,37 @@ SecRule REQUEST_URI "@contains CVE-" \
 SecRule REQUEST_BODY "@contains CVE-" \
     "phase:2,deny,status:403,id:10705,msg:'OWASP A06: CVE exploit attempt in body',tag:'OWASP_A06'"
 
-####################################################
-# A07:2021 - IDENTIFICATION AND AUTHENTICATION FAILURES
-####################################################
-SecRule REQUEST_URI "@contains /rest/user/login" \
-    "phase:1,setvar:ip.auth_attempt=+1,expirevar:ip.auth_attempt=300,id:10800,msg:'OWASP A07: Login attempt counted',tag:'OWASP_A07'"
 
-SecRule IP:auth_attempt "@gt 10" \
-    "phase:1,deny,status:429,id:10801,msg:'OWASP A07: Brute force attack',tag:'OWASP_A07'"
-
-SecRule ARGS:password "@contains 123456" \
-    "phase:2,deny,status:400,id:10802,msg:'OWASP A07: Weak password',tag:'OWASP_A07'"
-
-SecRule ARGS:password "@contains password" \
-    "phase:2,deny,status:400,id:10803,msg:'OWASP A07: Weak password',tag:'OWASP_A07'"
-
-SecRule ARGS:password "@rx ^.{0,7}$" \
-    "phase:2,deny,status:400,id:10804,msg:'OWASP A07: Password too short',tag:'OWASP_A07'"
-
-SecRule ARGS "@contains @gmail.com" \
-    "phase:2,deny,status:400,id:10805,msg:'OWASP A07: Credential phishing',tag:'OWASP_A07'"
 
 ####################################################
-# A08:2021 - SOFTWARE AND DATA INTEGRITY FAILURES
+# A09:2021 - SECURITY LOGGING AND MONITORING FAILURES
 ####################################################
-SecRule REQUEST_BODY "@contains rO0" \
-    "phase:2,deny,status:400,id:10900,msg:'OWASP A08: Deserialization attempt',tag:'OWASP_A08'"
+SecRule REQUEST_URI "@contains /logs" \
+    "phase:1,deny,status:403,id:11000,msg:'OWASP A09: Log access attempt',tag:'OWASP_A09'"
 
-SecRule REQUEST_BODY "@contains base64" \
-    "phase:2,deny,status:400,id:10901,msg:'OWASP A08: Base64 encoded data',tag:'OWASP_A08'"
+SecRule REQUEST_URI "@contains /admin" \
+    "phase:1,setvar:ip.admin_access=+1,expirevar:ip.admin_access=60,id:11001,msg:'OWASP A09: Admin access counted',tag:'OWASP_A09'"
 
-SecRule ARGS "@contains .exe" \
-    "phase:2,deny,status:403,id:10902,msg:'OWASP A08: EXE file upload attempt',tag:'OWASP_A08'"
+SecRule IP:admin_access "@gt 100" \
+    "phase:1,deny,status:429,id:11002,msg:'OWASP A09: Excessive admin access',tag:'OWASP_A09'"
 
-SecRule ARGS "@contains .php" \
-    "phase:2,deny,status:403,id:10903,msg:'OWASP A08: PHP file upload attempt',tag:'OWASP_A08'"
+####################################################
+# A10:2021 - SERVER-SIDE REQUEST FORGERY (SSRF)
+####################################################
+SecRule ARGS "@contains http://" \
+    "phase:2,deny,status:403,id:11100,msg:'OWASP A10: SSRF attempt',tag:'OWASP_A10'"
 
-SecRule ARGS:price "@contains ." \
-    "phase:2,pass,id:10904,msg:'OWASP A08: Price format check',tag:'OWASP_A08'"
+SecRule ARGS "@contains https://" \
+    "phase:2,deny,status:403,id:11101,msg:'OWASP A10: SSRF attempt',tag:'OWASP_A10'"
 
+SecRule ARGS "@contains file://" \
+    "phase:2,deny,status:403,id:11102,msg:'OWASP A10: SSRF file protocol',tag:'OWASP_A10'"
 
+SecRule REQUEST_HEADERS "@contains 127.0.0.1" \
+    "phase:1,deny,status:403,id:11103,msg:'OWASP A10: Localhost access',tag:'OWASP_A10'"
+
+SecRule REQUEST_HEADERS "@contains localhost" \
+    "phase:1,deny,status:403,id:11104,msg:'OWASP A10: Localhost access',tag:'OWASP_A10'"
 
 ###########################################################################
 # ДОПОЛНИТЕЛЬНЫЕ ПРАВИЛА
