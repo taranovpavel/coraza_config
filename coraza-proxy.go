@@ -168,7 +168,6 @@ SecRule ARGS|ARGS_NAMES|REQUEST_BODY "@rx --$" \
 SecRule ARGS|ARGS_NAMES|REQUEST_BODY "@rx /\\*.*\\*/" \
     "phase:2,deny,status:403,id:10310,msg:'OWASP A03: SQL block comment',tag:'OWASP_A03'"
 
-// Альтернатива с правильными регулярками
 SecRule ARGS|ARGS_NAMES|REQUEST_BODY "@rx sleep\\\\\\([0-9]+\\\\)" \
     "phase:2,deny,status:403,id:10311,msg:'OWASP A03: SQL time-based injection',tag:'OWASP_A03'"
 
@@ -177,7 +176,7 @@ SecRule ARGS|ARGS_NAMES|REQUEST_BODY "@rx benchmark\\\\\\(" \
 	
 SecRule ARGS|ARGS_NAMES|REQUEST_BODY "@rx pg_sleep\\\\\\(" \
     "phase:2,deny,status:403,id:10314,msg:'OWASP A03: PostgreSQL sleep injection',tag:'OWASP_A03'"
-	
+
 SecRule ARGS|ARGS_NAMES|REQUEST_BODY "@rx pg_sleep\\(" \
     "phase:2,deny,status:403,id:10314,msg:'OWASP A03: PostgreSQL sleep injection',tag:'OWASP_A03'"
 
