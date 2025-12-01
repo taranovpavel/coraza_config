@@ -332,10 +332,10 @@ SecRule REQUEST_BODY "@rx --\\s*$" \
     "phase:2,deny,status:403,id:10323,msg:'OWASP A03: SQL comment in body',tag:'OWASP_A03'"
 
 SecRule ARGS "@rx /\\*" \
-    "phase:2,deny,status:403,id:10324,msg:'OWASP A03: SQL block comment in args',tag:'OWASP_A03'"
+    "phase:2,deny,status:403,id:10324,msg:'SQL block comment start',tag:'sqli'"
 
-SecRule REQUEST_BODY "@rx /\\*" \
-    "phase:2,deny,status:403,id:10325,msg:'OWASP A03: SQL block comment in body',tag:'OWASP_A03'"
+SecRule ARGS "@rx \\*/" \
+    "phase:2,deny,status:403,id:10325,msg:'SQL block comment end',tag:'sqli'"
 
 SecRule ARGS "@rx ['\"]\\s*OR\\s*['\"]\\s*=\\s*['\"]" \
     "phase:2,deny,status:403,id:10326,msg:'OWASP A03: SQLi tautology in args',tag:'OWASP_A03'"
@@ -345,6 +345,9 @@ SecRule REQUEST_BODY "@rx ['\"]\\s*OR\\s*['\"]\\s*=\\s*['\"]" \
 
 SecRule ARGS "@rx ['\"]?\\s*(?i:or)\\s*1=1" \
     "phase:2,deny,status:403,id:10328,msg:'OWASP A03: SQLi OR/1=1 pattern',tag:'OWASP_A03',tag:'sqli'"
+
+SecRule ARGS "@rx %2F%2A" \
+    "phase:2,deny,status:403,id:10329,msg:'URL-encoded SQL comment',tag:'sqli'"
 
 ####################################################
 # A04:2021 - INSECURE DESIGN
