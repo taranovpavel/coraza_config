@@ -401,23 +401,7 @@ SecRule REQUEST_URI "@contains /admin" \
 SecRule IP:admin_access "@gt 100" \
     "phase:1,deny,status:429,id:11002,msg:'OWASP A09: Excessive admin access',tag:'OWASP_A09'"
 
-####################################################
-# A10:2021 - SERVER-SIDE REQUEST FORGERY (SSRF)
-####################################################
-SecRule ARGS "@contains http://" \
-    "phase:2,deny,status:403,id:11100,msg:'OWASP A10: SSRF attempt',tag:'OWASP_A10'"
 
-SecRule ARGS "@contains https://" \
-    "phase:2,deny,status:403,id:11101,msg:'OWASP A10: SSRF attempt',tag:'OWASP_A10'"
-
-SecRule ARGS "@contains file://" \
-    "phase:2,deny,status:403,id:11102,msg:'OWASP A10: SSRF file protocol',tag:'OWASP_A10'"
-
-SecRule REQUEST_HEADERS "@contains 127.0.0.1" \
-    "phase:1,deny,status:403,id:11103,msg:'OWASP A10: Localhost access',tag:'OWASP_A10'"
-
-SecRule REQUEST_HEADERS "@contains localhost" \
-    "phase:1,deny,status:403,id:11104,msg:'OWASP A10: Localhost access',tag:'OWASP_A10'"
 
 ###########################################################################
 # ДОПОЛНИТЕЛЬНЫЕ ПРАВИЛА
