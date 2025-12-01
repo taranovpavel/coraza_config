@@ -168,15 +168,15 @@ SecRule ARGS|ARGS_NAMES|REQUEST_BODY "@rx --$" \
 SecRule ARGS|ARGS_NAMES|REQUEST_BODY "@rx /\\*.*\\*/" \
     "phase:2,deny,status:403,id:10310,msg:'OWASP A03: SQL block comment',tag:'OWASP_A03'"
 
-SecRule ARGS|ARGS_NAMES|REQUEST_BODY "@contains sleep(" \
+SecRule ARGS|ARGS_NAMES|REQUEST_BODY "@contains sleep" \
     "phase:2,deny,status:403,id:10311,msg:'OWASP A03: SQL time-based injection',tag:'OWASP_A03'"
 
-SecRule ARGS|ARGS_NAMES|REQUEST_BODY "@contains benchmark(" \
+SecRule ARGS|ARGS_NAMES|REQUEST_BODY "@contains benchmark" \
     "phase:2,deny,status:403,id:10312,msg:'OWASP A03: SQL benchmark injection',tag:'OWASP_A03'"
-	
-SecRule ARGS|ARGS_NAMES|REQUEST_BODY "@contains pg_sleep(" \
-    "phase:2,deny,status:403,id:10314,msg:'OWASP A03: PostgreSQL sleep injection',tag:'OWASP_A03'"
 
+SecRule ARGS|ARGS_NAMES|REQUEST_BODY "@contains pg_sleep" \
+    "phase:2,deny,status:403,id:10314,msg:'OWASP A03: PostgreSQL sleep injection',tag:'OWASP_A03'"
+	
 SecRule ARGS|ARGS_NAMES|REQUEST_BODY "@rx pg_sleep\\(" \
     "phase:2,deny,status:403,id:10314,msg:'OWASP A03: PostgreSQL sleep injection',tag:'OWASP_A03'"
 
