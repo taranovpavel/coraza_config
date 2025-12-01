@@ -113,8 +113,8 @@ SecRule REQUEST_URI "@beginsWith /api/" \
     "phase:1,chain,deny,status:403,id:10104,msg:'OWASP A01: Unauthorized API access',tag:'OWASP_A01'"
 SecRule &REQUEST_HEADERS:Authorization "@eq 0"
 
-SecRule REQUEST_HEADERS:Origin "!@contains localhost" \
-    "phase:1,deny,status:403,id:10105,msg:'OWASP A01: Invalid CORS origin',tag:'OWASP_A01'"
+SecRule REQUEST_URI "@beginsWith /socket.io/" \
+    "phase:1,pass,id:10106,ctl:ruleRemoveById=10105"
 
 ####################################################
 # A02:2021 - CRYPTOGRAPHIC FAILURES
