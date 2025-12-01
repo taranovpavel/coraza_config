@@ -387,6 +387,26 @@ SecRule REQUEST_URI "@contains CVE-" \
 SecRule REQUEST_BODY "@contains CVE-" \
     "phase:2,deny,status:403,id:10705,msg:'OWASP A06: CVE exploit attempt in body',tag:'OWASP_A06'"
 
+####################################################
+# A07:2021 - IDENTIFICATION AND AUTHENTICATION FAILURES
+####################################################
+SecRule REQUEST_URI "@contains /rest/user/login" \
+    "phase:1,setvar:ip.auth_attempt=+1,expirevar:ip.auth_attempt=300,id:10800,msg:'OWASP A07: Login attempt counted',tag:'OWASP_A07'"
+
+SecRule IP:auth_attempt "@gt 10" \
+    "phase:1,deny,status:429,id:10801,msg:'OWASP A07: Brute force attack',tag:'OWASP_A07'"
+
+SecRule ARGS:password "@contains 123456" \
+    "phase:2,deny,status:400,id:10802,msg:'OWASP A07: Weak password',tag:'OWASP_A07'"
+
+SecRule ARGS:password "@contains password" \
+    "phase:2,deny,status:400,id:10803,msg:'OWASP A07: Weak password',tag:'OWASP_A07'"
+
+SecRule ARGS:password "@rx ^.{0,7}$" \
+    "phase:2,deny,status:400,id:10804,msg:'OWASP A07: Password too short',tag:'OWASP_A07'"
+
+SecRule ARGS "@contains @gmail.com" \
+    "phase:2,deny,status:400,id:10805,msg:'OWASP A07: Credential phishing',tag:'OWASP_A07'"
 
 
 ####################################################
