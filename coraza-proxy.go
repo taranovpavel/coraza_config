@@ -343,23 +343,6 @@ SecRule REQUEST_BODY "@contains javascript:" \
 SecRule REQUEST_BODY "@contains alert(" \
     "phase:2,deny,status:403,id:10452,msg:'OWASP A03: XSS alert in body',tag:'OWASP_A03'"
 
-####################################################
-# A04:2021 - INSECURE DESIGN
-####################################################
-SecRule ARGS "@contains password=" \
-    "phase:2,deny,status:400,id:10500,msg:'OWASP A04: Mass assignment attempt',tag:'OWASP_A04'"
-
-SecRule ARGS "@contains role=" \
-    "phase:2,deny,status:400,id:10501,msg:'OWASP A04: Mass assignment role',tag:'OWASP_A04'"
-
-SecRule ARGS:price "@contains -" \
-    "phase:2,deny,status:400,id:10502,msg:'OWASP A04: Negative price',tag:'OWASP_A04'"
-
-SecRule ARGS:amount "@contains -" \
-    "phase:2,deny,status:400,id:10503,msg:'OWASP A04: Negative amount',tag:'OWASP_A04'"
-
-SecRule REQUEST_URI "@contains /checkout/" \
-    "phase:1,deny,status:403,id:10504,msg:'OWASP A04: Checkout bypass attempt',tag:'OWASP_A04'"
 
 ####################################################
 # A05:2021 - SECURITY MISCONFIGURATION
