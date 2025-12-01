@@ -323,14 +323,6 @@ SecRule ARGS|ARGS_NAMES|REQUEST_BODY "@contains |perl" \
 SecRule ARGS|ARGS_NAMES|REQUEST_BODY "@contains |php" \
     "phase:2,deny,status:403,id:10410,msg:'OWASP A03: Command injection php',tag:'OWASP_A03'"
 
-# LDAP INJECTION
-SecRule ARGS|ARGS_NAMES|REQUEST_BODY "@contains |(" \
-    "phase:2,deny,status:403,id:10420,msg:'OWASP A03: LDAP injection',tag:'OWASP_A03',tag:'ldapi'"
-
-# XPATH INJECTION
-SecRule ARGS|ARGS_NAMES|REQUEST_BODY "@contains /[" \
-    "phase:2,deny,status:403,id:10430,msg:'OWASP A03: XPath injection',tag:'OWASP_A03',tag:'xpath'"
-	
 ####################################################
 # A04:2021 - INSECURE DESIGN
 ####################################################
