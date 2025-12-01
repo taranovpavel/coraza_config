@@ -347,12 +347,9 @@ SecRule REQUEST_HEADERS:User-Agent "@contains nikto" \
 SecRule REQUEST_URI "@endsWith /" \
     "phase:1,deny,status:403,id:10603,msg:'OWASP A05: Directory listing attempt',tag:'OWASP_A05'"
 
-SecRule ARGS "@contains index." \
-    "phase:1,deny,status:403,id:10603,msg:'OWASP A05: Directory listing index file',tag:'OWASP_A05'"
-
 SecRule REQUEST_FILENAME "@contains .bak" \
     "phase:1,deny,status:403,id:10604,msg:'OWASP A05: Backup file access',tag:'OWASP_A05'"
-	
+
 SecRule REQUEST_FILENAME "@contains .env" \
     "phase:1,deny,status:403,id:10605,msg:'OWASP A05: Config file access',tag:'OWASP_A05'"
 
