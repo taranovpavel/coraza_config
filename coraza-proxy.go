@@ -345,7 +345,9 @@ SecRule REQUEST_HEADERS:User-Agent "@contains nikto" \
     "phase:1,deny,status:403,id:10602,msg:'OWASP A05: Web scanner detected',tag:'OWASP_A05'"
 
 SecRule REQUEST_URI "@endsWith /" \
-    "phase:1,deny,status:403,id:10603,msg:'OWASP A05: Directory listing attempt',tag:'OWASP_A05'"
+    "phase:1,chain,id:10603,msg:'OWASP A05: Possible directory listing',tag:'OWASP_A05'"
+SecRule ARGS "@rx index\.(php|asp|jsp|html)" \
+    "deny,status:403"
 
 SecRule REQUEST_FILENAME "@contains .bak" \
     "phase:1,deny,status:403,id:10604,msg:'OWASP A05: Backup file access',tag:'OWASP_A05'"
